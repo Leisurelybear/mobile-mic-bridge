@@ -26,7 +26,11 @@ void main() {
     controller.handleLifecycleState(AppLifecycleState.paused);
     await flushEvents();
 
-    expect(controller.state.bridgeState, BridgeState.streaming);
+    expect(
+      controller.state.bridgeState,
+      BridgeState.streaming,
+      reason: controller.state.status,
+    );
     expect(capture.stopCount, 0);
     expect(sockets.created.single.closeCount, 0);
 
@@ -54,10 +58,14 @@ void main() {
     await Future.wait([controller.pause(), controller.pause()]);
     await Future.wait([controller.resume(), controller.resume()]);
 
+    expect(
+      controller.state.bridgeState,
+      BridgeState.streaming,
+      reason: controller.state.status,
+    );
     expect(sockets.connectCount, 1);
     expect(capture.startCount, 2);
     expect(capture.maxActiveStreams, 1);
-    expect(controller.state.bridgeState, BridgeState.streaming);
     await controller.shutdown();
   });
 
@@ -77,8 +85,12 @@ void main() {
     await flushEvents();
     await controller.resume();
 
+    expect(
+      controller.state.bridgeState,
+      BridgeState.streaming,
+      reason: controller.state.status,
+    );
     expect(sockets.connectCount, 2);
-    expect(controller.state.bridgeState, BridgeState.streaming);
     expect(
       sockets.created.last.sent.whereType<String>().map(jsonDecode),
       contains(predicate((dynamic value) => value['type'] == 'resume')),
@@ -103,7 +115,11 @@ void main() {
     staleSocket.emit('{type:error,message:stale}');
     await flushEvents();
 
-    expect(controller.state.bridgeState, BridgeState.streaming);
+    expect(
+      controller.state.bridgeState,
+      BridgeState.streaming,
+      reason: controller.state.status,
+    );
     expect(controller.state.status, isNot(contains('stale')));
     await controller.shutdown();
   });
@@ -125,7 +141,11 @@ void main() {
       ),
     );
 
-    expect(controller.state.bridgeState, BridgeState.paused);
+    expect(
+      controller.state.bridgeState,
+      BridgeState.paused,
+      reason: controller.state.status,
+    );
     expect(controller.state.userPaused, isTrue);
     await controller.shutdown();
   });
