@@ -46,6 +46,17 @@ jobs:
           cp tool/Info.plist ios/Runner/Info.plist
           cp tool/ios/AppDelegate.swift ios/Runner/AppDelegate.swift
       - run: flutter pub get
-      - run: flutter analyze
+      - name: Flutter analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --machine 2>&1 | tee /tmp/flutter-analyze.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < /tmp/flutter-analyze.log
+          fi
+          exit "$status"
       - run: flutter test
       - run: flutter build apk --debug
