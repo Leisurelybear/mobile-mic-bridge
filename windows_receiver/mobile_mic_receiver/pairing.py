@@ -11,6 +11,25 @@ def build_pairing_uri(*, host: str, port: int, token: str) -> str:
     return f'mobilemic://connect?{urlencode(parameters)}'
 
 
+def make_qr_image(*, host: str, port: int, token: str, box_size: int = 6):
+    import qrcode
+    from PIL import Image
+
+    pairing_uri = build_pairing_uri(host=host, port=port, token=token)
+    code = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=box_size,
+        border=2,
+    )
+    code.add_data(pairing_uri)
+    code.make(fit=True)
+    image = code.make_image(fill_color='black', back_color='white')
+    if not isinstance(image, Image.Image):
+        image = image.get_image()
+    return image.convert('RGB')
+
+
 def print_pairing_qr(*, host: str, port: int, token: str) -> None:
     import qrcode
 

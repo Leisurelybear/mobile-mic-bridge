@@ -12,6 +12,7 @@ dependencies = [
   'websockets==16.1.1',
   'zeroconf==0.150.0',
   'qrcode==8.2',
+  'Pillow>=10.0',
 ]
 
 [project.optional-dependencies]
