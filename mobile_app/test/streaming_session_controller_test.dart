@@ -112,7 +112,10 @@ void main() {
     final staleSocket = sockets.created.single;
     await controller.stop();
     await controller.start(target);
-    staleSocket.emit('{type:error,message:stale}');
+    staleSocket.emit(jsonEncode(<String, String>{
+      'type': 'error',
+      'message': 'stale',
+    }));
     await flushEvents();
 
     expect(
@@ -215,7 +218,9 @@ class FakeSocketFactory implements StreamingSocketFactory {
 class FakeSocket implements StreamingSocket {
   FakeSocket() {
     _messages = StreamController<dynamic>(
-      onListen: () => scheduleMicrotask(() => emit('{type:ready}')),
+      onListen: () => scheduleMicrotask(() {
+        emit(jsonEncode(<String, String>{'type': 'ready'}));
+      }),
     );
   }
 
