@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  receiver-tests:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows_receiver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .[test]
+      - run: python -m pytest -q
+
+  mobile-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate platform projects
+        run: |
+          flutter create --platforms=android,ios --project-name mobile_mic_bridge .
+          cp tool/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp tool/Info.plist ios/Runner/Info.plist
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug
