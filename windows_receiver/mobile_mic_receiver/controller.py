@@ -4,8 +4,6 @@ import array
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any
-
 from .audio import AudioOutput
 from .buffer import AudioBuffer, BufferStats
 from .discovery import MdnsAdvertiser, local_ipv4_addresses
@@ -76,6 +74,7 @@ class ReceiverController:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._server: MicServer | None = None
+        self._stop_requested = threading.Event()
         self._running = False
         self._status = 'stopped'
         self._client_label = ''
@@ -100,6 +99,7 @@ class ReceiverController:
                 self._thread is not None and self._thread.is_alive()
             ):
                 raise RuntimeError('Receiver is already running')
+            self._stop_requested.clear()
             self._running = True
             self._status = 'starting'
             self._client_label = ''
@@ -121,8 +121,17 @@ class ReceiverController:
         thread.start()
 
     def stop(self) -> None:
-        server: MicServer | None
-        thread: threading.Thread | None
+        self._stop_requested.set()
+        deadline = time.time() + 2.0
+        server: MicServer | None = None
+        thread: threading.Thread | None = None
+        while time.time() < deadline:
+            with self._lock:
+                server = self._server
+                thread = self._thread
+                if server is not None or thread is None or not thread.is_alive():
+                    break
+            time.sleep(0.02)
         with self._lock:
             server = self._server
             thread = self._thread
@@ -131,13 +140,22 @@ class ReceiverController:
         if thread is not None and thread.is_alive():
             thread.join(timeout=3)
         with self._lock:
-            self._running = False
-            if self._status != 'error':
+            still_alive = thread is not None and thread.is_alive()
+            self._running = still_alive
+            if still_alive:
+                self._status = 'error'
+                self._last_error = '停止接收超时，请关闭窗口后重试'
+            elif self._status != 'error':
                 self._status = 'stopped'
-            self._server = None
-            self._thread = None
-            self._client_label = ''
-            self._bound_port = None
+                self._server = None
+                self._thread = None
+                self._client_label = ''
+                self._bound_port = None
+            else:
+                self._server = None
+                self._thread = None
+                self._client_label = ''
+                self._bound_port = None
 
     def snapshot(self) -> ControllerSnapshot:
         with self._lock:
@@ -258,6 +276,10 @@ class ReceiverController:
             with self._lock:
                 self._server = server
 
+            if self._stop_requested.is_set():
+                server.request_stop()
+                return
+
             with AudioOutput(
                 peak_buffer,  # type: ignore[arg-type]
                 device=config.device,
@@ -265,6 +287,9 @@ class ReceiverController:
                 channels=self._channels,
                 blocksize=480,
             ):
+                if self._stop_requested.is_set():
+                    server.request_stop()
+                    return
                 asyncio.run(self._run_server(server))
         except Exception as error:  # noqa: BLE001 - report to UI
             self._set_error(str(error))
