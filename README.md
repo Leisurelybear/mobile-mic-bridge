@@ -13,12 +13,13 @@ The mobile app captures mono PCM audio and streams it over a WebSocket on the lo
 - Bounded jitter buffer with underflow recovery
 - Optional connection password
 - Automatic Windows receiver discovery with mDNS/DNS-SD
+- Windows GUI receiver with in-window pairing QR and level meters
 - QR-code pairing fallback when mDNS is unavailable
 - Remembers the last receiver address, port, and transmit gain
 - Phone-side transmit gain from 0% to 200%
 - Repeatable pause and resume without reconnecting
 - Selectable Windows output device
-- Automatic Android APK, unsigned iOS app archive, and Windows x64/ARM64 EXE releases
+- Automatic Android APK, unsigned iOS app archive, and Windows x64/ARM64 GUI EXE releases
 - English and Chinese documentation
 
 ## Architecture
@@ -41,30 +42,31 @@ The virtual cable is required because normal Windows applications cannot create 
 
 ### 1. Prepare Windows
 
-1. Install Python 3.10 or newer.
-2. Install a virtual audio cable. With VB-CABLE, the receiver sends audio to `CABLE Input`, while voice applications select `CABLE Output` as their microphone.
-3. Open PowerShell in `windows_receiver`.
-4. Create the environment and install the receiver:
+1. Install a virtual audio cable. With VB-CABLE, the receiver sends audio to `CABLE Input`, while voice applications select `CABLE Output` as their microphone.
+2. Download `mobile-mic-receiver-windows-x64.exe` from [Releases](https://github.com/Leisurelybear/mobile-mic-bridge/releases) (use the ARM64 build on ARM PCs).
+3. Double-click the GUI receiver.
+4. Choose the output device (for example `CABLE Input`), set a connection password, and click **Start**.
+5. Allow TCP port `8765` when Windows Firewall asks.
+6. The window shows local addresses and a pairing QR code.
+
+Settings are stored at `%APPDATA%\MobileMicBridge\settings.json`, including the connection password in plain text for local convenience (not a secure vault).
+
+#### Developers: run from source
 
 ```powershell
+cd windows_receiver
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+mobile-mic-receiver-gui
 ```
 
-5. Find the virtual cable output device:
+The console entry point remains available:
 
 ```powershell
 mobile-mic-receiver --list-devices
-```
-
-6. Start the receiver using the displayed device index:
-
-```powershell
 mobile-mic-receiver --device 12 --token choose-a-password
 ```
-
-Allow TCP port `8765` when Windows Firewall asks. The receiver prints the local IPv4 addresses that can be entered on the phone.
 
 ### 2. Build the Mobile App
 
@@ -81,7 +83,7 @@ An iOS build requires macOS, Xcode, an Apple developer team, and normal code sig
 ### 3. Connect
 
 1. Put the phone and PC on the same Wi-Fi network.
-2. Select the discovered PC, scan the QR code printed by Windows, or enter its IPv4 address and port `8765` manually.
+2. Select the discovered PC, scan the QR code in the Windows window, or enter its IPv4 address and port `8765` manually.
 3. Tap `开始传输`.
 4. In the target Windows application, choose the virtual cable output as the microphone.
 
@@ -91,7 +93,9 @@ The volume slider changes the PCM level sent to Windows. `100%` preserves the ca
 
 The app remembers the last host, port, and gain. The connection password is intentionally kept only for the current app session and is not persisted.
 
-## Receiver Options
+## Receiver CLI Options
+
+The developer console entry `mobile-mic-receiver` supports:
 
 ```text
 --host            Bind address, default 0.0.0.0
@@ -104,6 +108,8 @@ The app remembers the last host, port, and gain. The connection password is inte
 --no-qr           Do not print the terminal pairing QR code
 --list-devices    List output devices and exit
 ```
+
+The GUI exposes the same port, password, latency, prebuffer, and mDNS controls.
 
 Lower `--prebuffer-ms` reduces latency but increases crackling risk on unstable Wi-Fi. Values between 60 and 120 ms are practical starting points.
 `--prebuffer-ms` must not exceed `--latency-ms`.

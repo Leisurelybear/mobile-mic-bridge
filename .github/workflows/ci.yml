@@ -20,6 +20,7 @@ jobs:
       - run: python -m pip install -e .[test]
       - run: python -m pytest -q
       - run: python -m mobile_mic_receiver.cli --help
+      - run: python -c "from mobile_mic_receiver.gui.app import run_app; print('gui-import-ok')"
 
   mobile-checks:
     runs-on: ubuntu-latest

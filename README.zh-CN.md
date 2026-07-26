@@ -13,12 +13,13 @@
 - 带欠载恢复的有界抖动缓冲
 - 可选连接密码
 - 通过 mDNS/DNS-SD 自动发现 Windows 接收端
-- 自动发现失败时可扫描 Windows 终端二维码
+- Windows 图形界面接收端，内置配对二维码与电平显示
+- 自动发现失败时可扫描 Windows 窗口中的二维码
 - 记住上次电脑地址、端口和发送音量
 - 手机端 0% 到 200% 发送音量控制
 - 不断开连接即可重复暂停和继续
 - Windows 可选择音频输出设备
-- 自动构建 Android APK、未签名 iOS 应用归档和 Windows x64/ARM64 EXE
+- 自动构建 Android APK、未签名 iOS 应用归档和 Windows x64/ARM64 图形界面 EXE
 - 中英文文档
 
 ## 工作原理
@@ -41,30 +42,31 @@ Windows 普通应用无法在不安装签名音频驱动的情况下创建系统
 
 ### 1. 配置 Windows
 
-1. 安装 Python 3.10 或更高版本。
-2. 安装虚拟音频线。以 VB-CABLE 为例，接收端输出到 `CABLE Input`，语音软件把 `CABLE Output` 选为麦克风。
-3. 在 `windows_receiver` 目录打开 PowerShell。
-4. 创建虚拟环境并安装接收端：
+1. 安装虚拟音频线。以 VB-CABLE 为例，接收端输出到 `CABLE Input`，语音软件把 `CABLE Output` 选为麦克风。
+2. 从 [Releases](https://github.com/Leisurelybear/mobile-mic-bridge/releases) 下载 `mobile-mic-receiver-windows-x64.exe`（ARM 电脑下载 ARM64 版本）。
+3. 双击运行接收端图形界面。
+4. 选择输出设备（例如 `CABLE Input`），设置连接密码，点击 **启动接收**。
+5. Windows 防火墙弹窗出现时，允许 TCP 端口 `8765` 通过专用网络。
+6. 窗口会显示本机地址和配对二维码。
+
+设置会保存在 `%APPDATA%\MobileMicBridge\settings.json`，包括连接密码（明文本地存储，仅图方便，不是保险库）。
+
+#### 开发者：从源码运行
 
 ```powershell
+cd windows_receiver
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+mobile-mic-receiver-gui
 ```
 
-5. 查看可用输出设备：
+命令行入口仍可用：
 
 ```powershell
 mobile-mic-receiver --list-devices
-```
-
-6. 使用列表中的设备编号启动接收端：
-
-```powershell
 mobile-mic-receiver --device 12 --token 自定义密码
 ```
-
-Windows 防火墙弹窗出现时，允许 TCP 端口 `8765` 通过专用网络。接收端会输出可以填写到手机上的本机 IPv4 地址。
 
 ### 2. 构建手机端
 
@@ -81,7 +83,7 @@ iOS 构建需要 macOS、Xcode、Apple 开发团队和正常的代码签名；An
 ### 3. 建立连接
 
 1. 手机和电脑连接同一个 Wi-Fi。
-2. 点击自动发现的电脑、扫描 Windows 终端二维码，或手动填写 IPv4 地址和端口 `8765`。
+2. 点击自动发现的电脑、扫描 Windows 窗口中的二维码，或手动填写 IPv4 地址和端口 `8765`。
 3. 点击 `开始传输`。
 4. 在 Discord、OBS 或其他目标软件中，把虚拟音频线输出选为麦克风。
 
@@ -91,7 +93,9 @@ iOS 构建需要 macOS、Xcode、Apple 开发团队和正常的代码签名；An
 
 应用会记住上次连接的电脑地址、端口和音量。连接密码只保留在本次运行内存中，不会持久化保存。
 
-## 接收端参数
+## 接收端命令行参数
+
+命令行开发入口 `mobile-mic-receiver` 支持：
 
 ```text
 --host            监听地址，默认 0.0.0.0
@@ -104,6 +108,8 @@ iOS 构建需要 macOS、Xcode、Apple 开发团队和正常的代码签名；An
 --no-qr           不在终端显示配对二维码
 --list-devices    列出输出设备后退出
 ```
+
+图形界面中的端口、密码、延迟、预缓冲和 mDNS 开关与上述含义相同。
 
 降低 `--prebuffer-ms` 可以减少延迟，但 Wi-Fi 不稳定时更容易爆音。建议从 60 到 120 毫秒开始调整。
 `--prebuffer-ms` 不能大于 `--latency-ms`。
