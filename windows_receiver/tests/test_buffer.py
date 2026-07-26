@@ -37,7 +37,19 @@ def test_drops_oldest_audio_when_limit_is_exceeded() -> None:
     assert buffer.read(20) == b'\x02\x00' * 20
 
 
-def test_ignores_partial_pcm_frame() -> None:
+def test_preserves_pcm_frame_split_across_writes() -> None:
     buffer = make_buffer(prebuffer_ms=1)
     buffer.write(b'\x01')
     assert buffer.stats().queued_bytes == 0
+    buffer.write(b'\x00')
+    assert buffer.stats().queued_bytes == 2
+    assert buffer.read(1) == b'\x01\x00'
+
+
+def test_rejects_prebuffer_larger_than_latency_limit() -> None:
+    try:
+        make_buffer(max_latency_ms=20, prebuffer_ms=21)
+    except ValueError as error:
+        assert 'Prebuffer' in str(error)
+    else:
+        raise AssertionError('Expected invalid buffer settings to fail')

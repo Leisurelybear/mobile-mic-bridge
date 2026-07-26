@@ -13,7 +13,7 @@ The mobile app captures mono PCM audio and streams it over a WebSocket on the lo
 - Bounded jitter buffer with underflow recovery
 - Optional connection password
 - Selectable Windows output device
-- Automatic Android APK, unsigned iOS app archive, and Windows EXE releases
+- Automatic Android APK, unsigned iOS app archive, and Windows x64/ARM64 EXE releases
 - English and Chinese documentation
 
 ## Architecture
@@ -80,7 +80,7 @@ An iOS build requires macOS, Xcode, an Apple developer team, and normal code sig
 3. Tap `开始传输`.
 4. In the target Windows application, choose the virtual cable output as the microphone.
 
-Use headphones to prevent the PC speakers from feeding back into the phone microphone.
+The app keeps the screen awake while streaming. Moving it to the background still stops the current MVP session. Use headphones to prevent the PC speakers from feeding back into the phone microphone.
 
 ## Receiver Options
 
@@ -95,6 +95,7 @@ Use headphones to prevent the PC speakers from feeding back into the phone micro
 ```
 
 Lower `--prebuffer-ms` reduces latency but increases crackling risk on unstable Wi-Fi. Values between 60 and 120 ms are practical starting points.
+`--prebuffer-ms` must not exceed `--latency-ms`.
 
 ## Security
 
@@ -129,7 +130,8 @@ The wire protocol is documented in `docs/protocol.md`.
 Push a tag such as `v0.1.0` to trigger `.github/workflows/release.yml`. The workflow publishes:
 
 - Android universal release APK
-- Windows standalone receiver EXE
+- Windows standalone receiver EXE for x64
+- Windows standalone receiver EXE for ARM64
 - Unsigned iOS Runner app archive for later signing on macOS
 
 GitHub Actions cannot produce an installable signed iOS IPA without repository-specific Apple signing certificates and provisioning profiles.
@@ -140,4 +142,3 @@ GitHub Actions cannot produce an installable signed iOS IPA without repository-s
 - Audio is uncompressed PCM, so typical bandwidth is about 768 kbit/s before WebSocket overhead.
 - The current transport is optimized for a local Wi-Fi network, not the public internet.
 - Windows microphone exposure depends on a separately installed virtual audio cable.
-

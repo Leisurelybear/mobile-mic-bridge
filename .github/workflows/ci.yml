@@ -12,13 +12,14 @@ jobs:
       run:
         working-directory: windows_receiver
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e .[test]
       - run: python -m pytest -q
+      - run: python -m mobile_mic_receiver.cli --help
 
   mobile-checks:
     runs-on: ubuntu-latest
@@ -26,13 +27,14 @@ jobs:
       run:
         working-directory: mobile_app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.7'
           channel: stable
           cache: true
       - name: Generate platform projects

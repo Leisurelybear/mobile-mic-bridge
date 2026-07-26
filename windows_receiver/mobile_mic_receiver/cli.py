@@ -44,11 +44,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
     if args.list_devices:
         for index, name, channels in list_output_devices():
             print(f'{index:>3}  {name} (outputs: {channels})')
         return
+    if not 1 <= args.port <= 65535:
+        parser.error('--port must be between 1 and 65535')
+    if args.latency_ms <= 0:
+        parser.error('--latency-ms must be positive')
+    if args.prebuffer_ms <= 0:
+        parser.error('--prebuffer-ms must be positive')
+    if args.prebuffer_ms > args.latency_ms:
+        parser.error('--prebuffer-ms cannot exceed --latency-ms')
 
     sample_rate = 48000
     channels = 1
@@ -71,6 +80,8 @@ def main() -> None:
 
     print('Mobile Mic Bridge receiver')
     print(f'Listening on port {args.port}')
+    if not args.token:
+        print('Warning: no connection password is configured')
     addresses = _local_addresses()
     if addresses:
         print('Enter one of these addresses on the phone:')

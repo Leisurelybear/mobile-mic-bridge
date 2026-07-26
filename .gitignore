@@ -15,4 +15,3 @@ mobile_app/macos/
 mobile_app/windows/
 mobile_app/web/
 mobile_app/.metadata
-mobile_app/pubspec.lock

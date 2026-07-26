@@ -13,7 +13,7 @@
 - 带欠载恢复的有界抖动缓冲
 - 可选连接密码
 - Windows 可选择音频输出设备
-- 自动构建 Android APK、未签名 iOS 应用归档和 Windows EXE
+- 自动构建 Android APK、未签名 iOS 应用归档和 Windows x64/ARM64 EXE
 - 中英文文档
 
 ## 工作原理
@@ -80,7 +80,7 @@ iOS 构建需要 macOS、Xcode、Apple 开发团队和正常的代码签名；An
 3. 点击 `开始传输`。
 4. 在 Discord、OBS 或其他目标软件中，把虚拟音频线输出选为麦克风。
 
-建议使用耳机，避免电脑扬声器声音再次被手机收录而形成回声。
+传输期间应用会保持屏幕常亮。当前 MVP 切到后台仍会停止会话。建议使用耳机，避免电脑扬声器声音再次被手机收录而形成回声。
 
 ## 接收端参数
 
@@ -95,6 +95,7 @@ iOS 构建需要 macOS、Xcode、Apple 开发团队和正常的代码签名；An
 ```
 
 降低 `--prebuffer-ms` 可以减少延迟，但 Wi-Fi 不稳定时更容易爆音。建议从 60 到 120 毫秒开始调整。
+`--prebuffer-ms` 不能大于 `--latency-ms`。
 
 ## 安全说明
 
@@ -121,7 +122,7 @@ flutter test
 
 ## 自动发布
 
-推送 `v0.1.0` 这类标签会触发 `.github/workflows/release.yml`，并发布 Android APK、Windows 单文件 EXE 和未签名 iOS Runner 应用归档。
+推送 `v0.1.1` 这类新标签会触发 `.github/workflows/release.yml`，并发布 Android APK、Windows x64/ARM64 单文件 EXE 和未签名 iOS Runner 应用归档。
 
 GitHub Actions 无法在没有项目专属 Apple 证书和描述文件的情况下生成可直接安装的签名 IPA。
 

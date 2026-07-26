@@ -7,6 +7,7 @@
 - One active client at a time
 - Text frames carry control JSON
 - Binary frames carry raw audio bytes
+- Maximum WebSocket message size: 256 KiB
 
 WebSocket 地址为 `/mic`，默认 TCP 端口为 `8765`。文本帧传输控制 JSON，二进制帧传输原始音频。同一时间只接受一个手机连接。
 
@@ -26,9 +27,9 @@ The first frame must be a JSON object with these fields:
 | `token` | optional string | 可选连接密码 |
 | `device` | platform string | 手机平台信息 |
 
-The server responds with a JSON object whose type is `ready`, or an error object containing a human-readable message. An error closes the connection with WebSocket policy code `1008`.
+The server responds with a JSON object whose type is `ready`, or an error object containing a human-readable message. The sender must wait for `ready` before starting audio capture. An error closes the connection with WebSocket policy code `1008`.
 
-服务端返回类型为 `ready` 的 JSON 对象，或带有人类可读消息的错误对象。错误会使用 WebSocket 策略错误码 `1008` 关闭连接。
+服务端返回类型为 `ready` 的 JSON 对象，或带有人类可读消息的错误对象。发送端必须收到 `ready` 后才能开始录音。错误会使用 WebSocket 策略错误码 `1008` 关闭连接。
 
 ## Audio / 音频
 
@@ -37,6 +38,7 @@ The server responds with a JSON object whose type is `ready`, or an error object
 - Sample format: signed 16-bit little-endian PCM
 - Recommended packet duration: about 10 to 40 ms
 - No per-packet header; frame order is WebSocket order
+- A PCM sample may span two WebSocket messages; receivers preserve incomplete trailing bytes
 
 音频固定为 48 kHz、单声道、16 位小端有符号 PCM。建议每个二进制帧携带约 10 到 40 毫秒音频。音频帧没有额外包头，顺序就是 WebSocket 的可靠传输顺序。
 

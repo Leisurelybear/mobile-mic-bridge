@@ -5,8 +5,8 @@ import json
 import secrets
 from dataclasses import dataclass
 
+from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
-from websockets.legacy.server import WebSocketServerProtocol, serve
 
 from .buffer import AudioBuffer
 
@@ -27,12 +27,12 @@ class MicServer:
         self._client_lock = asyncio.Lock()
 
     async def _send_error(
-        self, websocket: WebSocketServerProtocol, message: str
+        self, websocket: ServerConnection, message: str
     ) -> None:
         await websocket.send(json.dumps({'type': 'error', 'message': message}))
         await websocket.close(code=1008, reason=message[:120])
 
-    async def _validate_hello(self, websocket: WebSocketServerProtocol) -> bool:
+    async def _validate_hello(self, websocket: ServerConnection) -> bool:
         try:
             first_message = await asyncio.wait_for(websocket.recv(), timeout=5)
             if not isinstance(first_message, str):
@@ -43,6 +43,9 @@ class MicServer:
             await self._send_error(websocket, 'Invalid or missing hello message')
             return False
 
+        if not isinstance(hello, dict):
+            await self._send_error(websocket, 'Hello message must be a JSON object')
+            return False
         if hello.get('type') != 'hello' or hello.get('version') != 1:
             await self._send_error(websocket, 'Unsupported protocol')
             return False
@@ -62,10 +65,8 @@ class MicServer:
             return False
         return True
 
-    async def handler(
-        self, websocket: WebSocketServerProtocol, path: str
-    ) -> None:
-        if path != '/mic':
+    async def handler(self, websocket: ServerConnection) -> None:
+        if websocket.request.path != '/mic':
             await self._send_error(websocket, 'Unknown endpoint')
             return
         if self._client_lock.locked():
@@ -93,7 +94,8 @@ class MicServer:
             self.handler,
             self._config.host,
             self._config.port,
-            max_size=None,
+            max_size=256 * 1024,
+            max_queue=8,
             ping_interval=20,
             ping_timeout=20,
         ):

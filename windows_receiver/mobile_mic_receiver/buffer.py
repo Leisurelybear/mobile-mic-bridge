@@ -22,10 +22,17 @@ class AudioBuffer:
         max_latency_ms: int = 400,
         prebuffer_ms: int = 80,
     ) -> None:
+        if sample_rate <= 0 or channels <= 0 or sample_width <= 0:
+            raise ValueError('Audio format values must be positive')
+        if prebuffer_ms <= 0 or max_latency_ms <= 0:
+            raise ValueError('Buffer durations must be positive')
+        if prebuffer_ms > max_latency_ms:
+            raise ValueError('Prebuffer cannot exceed maximum latency')
         self._bytes_per_frame = channels * sample_width
         self._max_bytes = self._to_bytes(sample_rate, max_latency_ms)
         self._prebuffer_bytes = self._to_bytes(sample_rate, prebuffer_ms)
         self._data = bytearray()
+        self._remainder = b''
         self._lock = Lock()
         self._buffering = True
         self._dropped_bytes = 0
@@ -36,11 +43,13 @@ class AudioBuffer:
         return frames * self._bytes_per_frame
 
     def write(self, data: bytes) -> None:
-        usable_length = len(data) - (len(data) % self._bytes_per_frame)
-        if usable_length <= 0:
-            return
         with self._lock:
-            self._data.extend(data[:usable_length])
+            combined = self._remainder + data
+            usable_length = len(combined) - (len(combined) % self._bytes_per_frame)
+            self._remainder = combined[usable_length:]
+            if usable_length <= 0:
+                return
+            self._data.extend(combined[:usable_length])
             overflow = len(self._data) - self._max_bytes
             if overflow > 0:
                 overflow -= overflow % self._bytes_per_frame
@@ -69,6 +78,7 @@ class AudioBuffer:
     def clear(self) -> None:
         with self._lock:
             self._data.clear()
+            self._remainder = b''
             self._buffering = True
 
     def stats(self) -> BufferStats:
