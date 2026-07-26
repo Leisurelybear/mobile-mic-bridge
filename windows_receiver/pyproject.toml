@@ -13,6 +13,7 @@ dependencies = [
   'zeroconf==0.150.0',
   'qrcode==8.2',
   'Pillow>=10.0',
+  'customtkinter>=5.2.0',
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,7 @@ test = ['pytest>=8.0,<9.0']
 
 [project.scripts]
 mobile-mic-receiver = 'mobile_mic_receiver.cli:main'
+mobile-mic-receiver-gui = 'mobile_mic_receiver.gui.app:run_app'
 
 [tool.setuptools.packages.find]
 where = ['.']
