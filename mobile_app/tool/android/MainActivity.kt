@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -13,13 +13,6 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var pendingPermissionResult: MethodChannel.Result? = null
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            pendingPermissionResult?.success(
-                granted && NotificationManagerCompat.from(this).areNotificationsEnabled()
-            )
-            pendingPermissionResult = null
-        }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -63,6 +56,28 @@ class MainActivity : FlutterActivity() {
             return
         }
         pendingPermissionResult = result
-        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION_REQUEST
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        pendingPermissionResult?.success(
+            granted && NotificationManagerCompat.from(this).areNotificationsEnabled()
+        )
+        pendingPermissionResult = null
+    }
+
+    companion object {
+        private const val NOTIFICATION_PERMISSION_REQUEST = 48001
     }
 }
