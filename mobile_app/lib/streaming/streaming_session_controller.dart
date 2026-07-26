@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:record/record.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -70,8 +69,7 @@ class StreamingSessionController extends ChangeNotifier {
         _socketFactory = socketFactory ?? IoStreamingSocketFactory(),
         _wakelock = wakelock ?? WakelockSession(),
         _platformAudioResources =
-            platformAudioResources ?? MethodChannelPlatformAudioResources() {
-  }
+            platformAudioResources ?? MethodChannelPlatformAudioResources();
 
   final AudioCapture _audioCapture;
   final StreamingSocketFactory _socketFactory;
@@ -162,7 +160,9 @@ class StreamingSessionController extends ChangeNotifier {
       return;
     }
     if (_state.bridgeState != BridgeState.idle &&
-        _state.bridgeState != BridgeState.error) return;
+        _state.bridgeState != BridgeState.error) {
+      return;
+    }
     if (target.host.isEmpty || target.port < 1 || target.port > 65535) {
       _setError('IP 地址或端口无效');
       return;
@@ -416,7 +416,9 @@ class StreamingSessionController extends ChangeNotifier {
 
   void _handleCaptureState(CaptureState captureState) {
     if (_disposed || _cleanupInProgress || _userPauseRequested ||
-        _state.bridgeState != BridgeState.streaming) return;
+        _state.bridgeState != BridgeState.streaming) {
+      return;
+    }
     switch (captureState) {
       case CaptureState.recording:
         if (_state.interruptionState == InterruptionState.interrupted) {
