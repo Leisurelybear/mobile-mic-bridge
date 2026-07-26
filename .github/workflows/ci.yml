@@ -65,9 +65,8 @@ jobs:
           flutter test 2>&1 | tee /tmp/flutter-test.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
-            while IFS= read -r line; do
-              echo "::error::$line"
-            done < /tmp/flutter-test.log
+            encoded=$(base64 -w 0 /tmp/flutter-test.log)
+            echo "::error title=Flutter test log (base64)::$encoded"
           fi
           exit "$status"
       - run: flutter build apk --debug
