@@ -85,7 +85,7 @@ An iOS build requires macOS, Xcode, an Apple developer team, and normal code sig
 3. Tap `开始传输`.
 4. In the target Windows application, choose the virtual cable output as the microphone.
 
-The app keeps the screen awake while streaming. Moving it to the background still stops the current MVP session. Use headphones to prevent the PC speakers from feeding back into the phone microphone.
+The app keeps streaming while it is backgrounded or the screen is locked. Android shows an ongoing microphone notification; iOS uses the audio background mode. User-paused sessions remain paused, and force-stop, swipe-away, or process termination ends the session. Use headphones to prevent the PC speakers from feeding back into the phone microphone.
 
 The volume slider changes the PCM level sent to Windows. `100%` preserves the captured level, `0%` mutes it, and values above `100%` may clip loud samples.
 
@@ -134,7 +134,7 @@ flutter analyze
 flutter test
 ```
 
-The wire protocol is documented in `docs/protocol.md`.
+The wire protocol is documented in `docs/protocol.md`. Mobile background recording behavior and limitations are documented in `docs/background-audio-spec.md`. LAN PCM remains unencrypted; the token controls access but does not encrypt audio.
 
 ## Releases
 

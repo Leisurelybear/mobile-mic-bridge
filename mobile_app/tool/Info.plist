@@ -45,6 +45,10 @@
     <true/>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
     <key>NSMicrophoneUsageDescription</key>
     <string>Capture audio and stream it to your Windows computer.</string>
     <key>NSCameraUsageDescription</key>

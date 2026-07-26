@@ -59,6 +59,8 @@ jobs:
         run: |
           flutter create --platforms=android --project-name mobile_mic_bridge .
           cp tool/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          mkdir -p android/app/src/main/kotlin/com/example/mobile_mic_bridge
+          cp tool/android/*.kt android/app/src/main/kotlin/com/example/mobile_mic_bridge/
       - run: flutter pub get
       - run: flutter build apk --release
       - name: Rename APK
@@ -84,6 +86,7 @@ jobs:
         run: |
           flutter create --platforms=ios --project-name mobile_mic_bridge .
           cp tool/Info.plist ios/Runner/Info.plist
+          cp tool/ios/AppDelegate.swift ios/Runner/AppDelegate.swift
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
       - name: Archive unsigned app

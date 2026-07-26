@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
-import 'audio_gain.dart';
 import 'connection_preferences.dart';
 import 'qr_scanner_page.dart';
 import 'receiver_discovery.dart';
+import 'streaming/streaming_session_controller.dart';
+import 'streaming/streaming_session_state.dart';
 
 void main() => runApp(const MobileMicApp());
 
@@ -33,17 +30,6 @@ class MobileMicApp extends StatelessWidget {
   }
 }
 
-enum BridgeState { idle, connecting, streaming, paused, resuming, error }
-
-class BridgeException implements Exception {
-  const BridgeException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => message;
-}
-
 class MicBridgePage extends StatefulWidget {
   const MicBridgePage({super.key});
 
@@ -53,10 +39,6 @@ class MicBridgePage extends StatefulWidget {
 
 class _MicBridgePageState extends State<MicBridgePage>
     with WidgetsBindingObserver {
-  static const sampleRate = 48000;
-  static const channels = 1;
-
-  final AudioRecorder _recorder = AudioRecorder();
   final TextEditingController _hostController =
       TextEditingController(text: '192.168.1.100');
   final TextEditingController _portController =
@@ -64,29 +46,28 @@ class _MicBridgePageState extends State<MicBridgePage>
   final TextEditingController _tokenController = TextEditingController();
   final ConnectionPreferences _connectionPreferences = ConnectionPreferences();
   final ReceiverDiscovery _receiverDiscovery = ReceiverDiscovery();
+  final StreamingSessionController _streamingController =
+      StreamingSessionController();
 
-  WebSocket? _socket;
-  StreamSubscription<List<int>>? _audioSubscription;
-  Future<void>? _pendingRecorderStart;
-  Timer? _durationTimer;
-  int _sessionId = 0;
-  int? _wakelockSessionId;
-  bool _isStopping = false;
-  bool _isPausing = false;
-  double _gain = 1;
-  BridgeState _bridgeState = BridgeState.idle;
-  Duration _duration = Duration.zero;
-  String _status = '输入 Windows 电脑的局域网 IP';
+  BridgeState get _bridgeState => _streamingController.state.bridgeState;
+  Duration get _duration => _streamingController.state.duration;
+  double get _gain => _streamingController.state.gain;
+  String get _status => _streamingController.state.status;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _streamingController.addListener(_handleStreamingChanged);
     _receiverDiscovery.addListener(_handleDiscoveryChanged);
     unawaited(_loadSavedConnection());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_receiverDiscovery.start());
     });
+  }
+
+  void _handleStreamingChanged() {
+    if (mounted) setState(() {});
   }
 
   void _handleDiscoveryChanged() {
@@ -107,9 +88,7 @@ class _MicBridgePageState extends State<MicBridgePage>
     if (saved.port != null) {
       _portController.text = saved.port.toString();
     }
-    setState(() {
-      _gain = (saved.gain ?? 1).clamp(0, 2).toDouble();
-    });
+    _streamingController.setGain((saved.gain ?? 1).clamp(0, 2).toDouble());
   }
 
   Future<void> _saveConnectionPreferences() async {
@@ -149,181 +128,36 @@ class _MicBridgePageState extends State<MicBridgePage>
     _portController.text = port.toString();
     final token = uri?.queryParameters['token'];
     if (token != null) _tokenController.text = token;
-    setState(() => _status = '二维码配对信息已填写');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('二维码配对信息已填写')),
+    );
     await _saveConnectionPreferences();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      unawaited(_stopStreaming());
-    }
+    _streamingController.handleLifecycleState(state);
   }
 
   Future<void> _startStreaming() async {
-    if (_isStopping) return;
     FocusManager.instance.primaryFocus?.unfocus();
     final host = _hostController.text.trim();
     final port = int.tryParse(_portController.text.trim());
     if (host.isEmpty || port == null || port < 1 || port > 65535) {
-      _setError('IP 地址或端口无效');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('IP 地址或端口无效')),
+      );
       return;
     }
     await _saveConnectionPreferences();
-
-    final sessionId = ++_sessionId;
-    setState(() {
-      _bridgeState = BridgeState.connecting;
-      _status = '正在连接 Windows…';
-    });
-
-    try {
-      if (!await _recorder.hasPermission()) {
-        _setError('未获得麦克风权限');
-        return;
-      }
-
-      final socketHost = host.contains(':') && !host.startsWith('[')
-          ? '[$host]'
-          : host;
-      final socket = await WebSocket.connect('ws://$socketHost:$port/mic')
-          .timeout(const Duration(seconds: 8));
-      if (sessionId != _sessionId) {
-        await socket.close();
-        return;
-      }
-      socket.pingInterval = const Duration(seconds: 10);
-      _socket = socket;
-      final ready = Completer<void>();
-      socket.listen(
-        (message) => _handleServerMessage(sessionId, message, ready),
-        onDone: () => _handleSocketClosed(sessionId, ready),
-        onError: (Object error) =>
-            _handleSocketError(sessionId, ready, error),
-        cancelOnError: true,
-      );
-      socket.add(jsonEncode(<String, Object>{
-        'type': 'hello',
-        'version': 1,
-        'sampleRate': sampleRate,
-        'channels': channels,
-        'format': 'pcm_s16le',
-        'token': _tokenController.text,
-        'device': Platform.operatingSystem,
-      }));
-      await ready.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => throw const BridgeException('Windows 未确认连接'),
-      );
-      if (sessionId != _sessionId) return;
-
-      if (!await _startAudioCapture(sessionId)) return;
-      _wakelockSessionId = sessionId;
-      await WakelockPlus.enable();
-      if (sessionId != _sessionId) {
-        if (_wakelockSessionId == sessionId) {
-          _wakelockSessionId = null;
-          await WakelockPlus.disable();
-        }
-        return;
-      }
-
-      _duration = Duration.zero;
-      _startDurationTimer();
-      setState(() {
-        _bridgeState = BridgeState.streaming;
-        _status = '麦克风正在传输';
-      });
-    } on TimeoutException {
-      if (sessionId != _sessionId) return;
-      _setError('连接超时，请检查 IP、防火墙和端口');
-      await _stopStreaming(sessionId: sessionId, keepError: true);
-    } catch (error) {
-      if (sessionId != _sessionId) return;
-      _setError('连接失败：$error');
-      await _stopStreaming(sessionId: sessionId, keepError: true);
-    }
+    await _streamingController.start(StreamingTarget(
+      host: host,
+      port: port,
+      token: _tokenController.text,
+    ));
   }
 
-  Future<bool> _startAudioCapture(int sessionId) async {
-    final recorderStartCompleted = Completer<void>();
-    final pendingStart = recorderStartCompleted.future;
-    _pendingRecorderStart = pendingStart;
-    late final Stream<List<int>> audioStream;
-    try {
-      audioStream = await _recorder.startStream(
-        const RecordConfig(
-          encoder: AudioEncoder.pcm16bits,
-          sampleRate: sampleRate,
-          numChannels: channels,
-          autoGain: false,
-          echoCancel: false,
-          noiseSuppress: false,
-        ),
-      );
-    } finally {
-      recorderStartCompleted.complete();
-      if (identical(_pendingRecorderStart, pendingStart)) {
-        _pendingRecorderStart = null;
-      }
-    }
-    if (sessionId != _sessionId) return false;
-    _audioSubscription = audioStream.listen(
-      (chunk) {
-        final activeSocket = _socket;
-        if (activeSocket?.readyState == WebSocket.open) {
-          activeSocket!.add(
-            _gain == 1 ? chunk : applyPcm16Gain(chunk, _gain),
-          );
-        }
-      },
-      onError: (Object error) {
-        if (sessionId != _sessionId) return;
-        _setError('录音失败：$error');
-        unawaited(
-          _stopStreaming(sessionId: sessionId, keepError: true),
-        );
-      },
-      cancelOnError: true,
-    );
-    return sessionId == _sessionId;
-  }
-
-  void _startDurationTimer() {
-    _durationTimer?.cancel();
-    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _bridgeState == BridgeState.streaming) {
-        setState(() => _duration += const Duration(seconds: 1));
-      }
-    });
-  }
-
-  Future<void> _pauseStreaming() async {
-    if (_bridgeState != BridgeState.streaming || _isPausing) return;
-    _isPausing = true;
-    final sessionId = _sessionId;
-    setState(() => _status = '正在暂停录音…');
-    try {
-      _durationTimer?.cancel();
-      _durationTimer = null;
-      await _audioSubscription?.cancel();
-      _audioSubscription = null;
-      if (await _recorder.isRecording()) await _recorder.stop();
-      if (sessionId != _sessionId) return;
-      _sendControl('pause');
-      setState(() {
-        _bridgeState = BridgeState.paused;
-        _status = '麦克风已暂停';
-      });
-    } catch (error) {
-      if (sessionId != _sessionId) return;
-      _setError('暂停失败：$error');
-      await _stopStreaming(sessionId: sessionId, keepError: true);
-    } finally {
-      _isPausing = false;
-    }
-  }
+  Future<void> _pauseStreaming() => _streamingController.pause();
 
   void _selectReceiver(DiscoveredReceiver receiver) {
     if (_bridgeState != BridgeState.idle &&
@@ -332,151 +166,15 @@ class _MicBridgePageState extends State<MicBridgePage>
     }
     _hostController.text = receiver.host;
     _portController.text = receiver.port.toString();
-    setState(() => _status = '已选择 ${receiver.name}');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已选择 ${receiver.name}')),
+    );
     unawaited(_saveConnectionPreferences());
   }
 
-  Future<void> _resumeStreaming() async {
-    if (_bridgeState != BridgeState.paused || _isStopping) return;
-    final sessionId = _sessionId;
-    setState(() {
-      _bridgeState = BridgeState.resuming;
-      _status = '正在继续录音…';
-    });
-    try {
-      if (_socket?.readyState != WebSocket.open) {
-        throw const BridgeException('Windows 连接已经断开');
-      }
-      _sendControl('resume');
-      if (!await _startAudioCapture(sessionId)) return;
-      _startDurationTimer();
-      setState(() {
-        _bridgeState = BridgeState.streaming;
-        _status = '麦克风正在传输';
-      });
-    } catch (error) {
-      if (sessionId != _sessionId) return;
-      _setError('继续失败：$error');
-      await _stopStreaming(sessionId: sessionId, keepError: true);
-    }
-  }
+  Future<void> _resumeStreaming() => _streamingController.resume();
 
-  void _sendControl(String type) {
-    final socket = _socket;
-    if (socket?.readyState == WebSocket.open) {
-      socket!.add(jsonEncode(<String, Object>{'type': type}));
-    }
-  }
-
-  void _handleServerMessage(
-    int sessionId,
-    dynamic message,
-    Completer<void> ready,
-  ) {
-    if (sessionId != _sessionId || message is! String) return;
-    try {
-      final decoded = jsonDecode(message);
-      if (decoded is! Map<String, dynamic>) return;
-      final payload = decoded;
-      if (payload['type'] == 'ready' && !ready.isCompleted) {
-        ready.complete();
-        return;
-      }
-      if (payload['type'] == 'error') {
-        final message = payload['message']?.toString() ?? 'Windows 拒绝连接';
-        if (!ready.isCompleted) {
-          ready.completeError(BridgeException(message));
-        } else {
-          _setError(message);
-          unawaited(
-            _stopStreaming(sessionId: sessionId, keepError: true),
-          );
-        }
-      }
-    } on FormatException {
-      return;
-    }
-  }
-
-  void _handleSocketClosed(int sessionId, Completer<void> ready) {
-    if (sessionId != _sessionId) return;
-    const message = 'Windows 已断开连接';
-    if (!ready.isCompleted) {
-      ready.completeError(const BridgeException(message));
-      return;
-    }
-    _setError(message);
-    unawaited(_stopStreaming(sessionId: sessionId, keepError: true));
-  }
-
-  void _handleSocketError(
-    int sessionId,
-    Completer<void> ready,
-    Object error,
-  ) {
-    if (sessionId != _sessionId) return;
-    final message = '网络错误：$error';
-    if (!ready.isCompleted) {
-      ready.completeError(BridgeException(message));
-      return;
-    }
-    _setError(message);
-    unawaited(_stopStreaming(sessionId: sessionId, keepError: true));
-  }
-
-  Future<void> _stopStreaming({
-    int? sessionId,
-    bool keepError = false,
-  }) async {
-    if (_isStopping || (sessionId != null && sessionId != _sessionId)) return;
-    _isStopping = true;
-    final stoppedSession = _sessionId;
-    _sessionId++;
-    try {
-      _durationTimer?.cancel();
-      _durationTimer = null;
-      await _pendingRecorderStart;
-      try {
-        await _audioSubscription?.cancel();
-      } catch (_) {}
-      _audioSubscription = null;
-      try {
-        if (await _recorder.isRecording()) await _recorder.stop();
-      } catch (_) {}
-      if (_wakelockSessionId == stoppedSession) {
-        _wakelockSessionId = null;
-        try {
-          await WakelockPlus.disable();
-        } catch (_) {}
-      }
-
-      final socket = _socket;
-      _socket = null;
-      try {
-        await socket?.close(WebSocketStatus.normalClosure, 'stopped');
-      } catch (_) {}
-
-      if (mounted &&
-          _sessionId == stoppedSession + 1 &&
-          !(keepError && _bridgeState == BridgeState.error)) {
-        setState(() {
-          _bridgeState = BridgeState.idle;
-          _status = '已停止';
-          _duration = Duration.zero;
-        });
-      }
-    } finally {
-      _isStopping = false;
-    }
-  }
-
-  void _setError(String message) {
-    if (!mounted) return;
-    setState(() {
-      _bridgeState = BridgeState.error;
-      _status = message;
-    });
-  }
+  Future<void> _stopStreaming() => _streamingController.stop();
 
   String get _formattedDuration {
     final minutes = _duration.inMinutes.toString().padLeft(2, '0');
@@ -486,16 +184,11 @@ class _MicBridgePageState extends State<MicBridgePage>
 
   @override
   void dispose() {
-    _sessionId++;
-    _wakelockSessionId = null;
     WidgetsBinding.instance.removeObserver(this);
+    _streamingController.removeListener(_handleStreamingChanged);
     _receiverDiscovery.removeListener(_handleDiscoveryChanged);
     _receiverDiscovery.dispose();
-    _durationTimer?.cancel();
-    _audioSubscription?.cancel();
-    _socket?.close();
-    unawaited(WakelockPlus.disable());
-    _recorder.dispose();
+    unawaited(_streamingController.shutdown());
     _hostController.dispose();
     _portController.dispose();
     _tokenController.dispose();
@@ -516,9 +209,9 @@ class _MicBridgePageState extends State<MicBridgePage>
     var primaryIcon = Icons.mic;
     var primaryLabel = '开始传输';
     if (isStreaming) {
-      primaryAction = _isPausing ? null : _pauseStreaming;
+      primaryAction = _pauseStreaming;
       primaryIcon = Icons.pause;
-      primaryLabel = _isPausing ? '正在暂停…' : '暂停';
+      primaryLabel = '暂停';
     } else if (isPaused) {
       primaryAction = _resumeStreaming;
       primaryIcon = Icons.play_arrow;
@@ -668,7 +361,7 @@ class _MicBridgePageState extends State<MicBridgePage>
                     max: 2,
                     divisions: 40,
                     label: '${(_gain * 100).round()}%',
-                    onChanged: (value) => setState(() => _gain = value),
+                    onChanged: _streamingController.setGain,
                     onChangeEnd: (_) => unawaited(
                       _saveConnectionPreferences(),
                     ),

@@ -41,7 +41,10 @@ jobs:
         run: |
           flutter create --platforms=android,ios --project-name mobile_mic_bridge .
           cp tool/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          mkdir -p android/app/src/main/kotlin/com/example/mobile_mic_bridge
+          cp tool/android/*.kt android/app/src/main/kotlin/com/example/mobile_mic_bridge/
           cp tool/Info.plist ios/Runner/Info.plist
+          cp tool/ios/AppDelegate.swift ios/Runner/AppDelegate.swift
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
