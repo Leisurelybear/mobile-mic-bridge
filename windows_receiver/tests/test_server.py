@@ -46,13 +46,17 @@ def test_accepts_valid_hello() -> None:
             }
         )
     )
-    assert asyncio.run(make_server()._validate_hello(websocket)) is True
+    ok, device = asyncio.run(make_server()._validate_hello(websocket))
+    assert ok is True
+    assert device == ''
     assert websocket.closed is None
 
 
 def test_rejects_non_object_hello() -> None:
     websocket = FakeWebSocket('[]')
-    assert asyncio.run(make_server()._validate_hello(websocket)) is False
+    ok, device = asyncio.run(make_server()._validate_hello(websocket))
+    assert ok is False
+    assert device == ''
     assert websocket.closed is not None
     assert 'JSON object' in websocket.sent[0]
 
@@ -70,7 +74,9 @@ def test_rejects_incorrect_password() -> None:
             }
         )
     )
-    assert asyncio.run(make_server()._validate_hello(websocket)) is False
+    ok, device = asyncio.run(make_server()._validate_hello(websocket))
+    assert ok is False
+    assert device == ''
     assert websocket.closed is not None
 
 

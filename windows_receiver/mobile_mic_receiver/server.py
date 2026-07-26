@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from websockets.asyncio.server import ServerConnection, serve
@@ -20,50 +21,80 @@ class ServerConfig:
     token: str = ''
 
 
+@dataclass(frozen=True)
+class ServerEvent:
+    kind: str
+    message: str = ''
+    device: str = ''
+    remote: str = ''
+
+
 class MicServer:
-    def __init__(self, config: ServerConfig, buffer: AudioBuffer) -> None:
+    def __init__(
+        self,
+        config: ServerConfig,
+        buffer: AudioBuffer,
+        on_event: Callable[[ServerEvent], None] | None = None,
+    ) -> None:
         self._config = config
         self._buffer = buffer
+        self._on_event = on_event or (lambda _event: None)
         self._client_lock = asyncio.Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._stop_event: asyncio.Event | None = None
+        self.bound_port: int | None = None
+
+    def _emit(self, kind: str, **kwargs: str) -> None:
+        self._on_event(ServerEvent(kind=kind, **kwargs))
+
+    def request_stop(self) -> None:
+        loop = self._loop
+        stop_event = self._stop_event
+        if loop is None or stop_event is None:
+            return
+        loop.call_soon_threadsafe(stop_event.set)
 
     async def _send_error(
         self, websocket: ServerConnection, message: str
     ) -> None:
+        self._emit('rejected', message=message)
         await websocket.send(json.dumps({'type': 'error', 'message': message}))
         await websocket.close(code=1008, reason=message[:120])
 
-    async def _validate_hello(self, websocket: ServerConnection) -> bool:
+    async def _validate_hello(
+        self, websocket: ServerConnection
+    ) -> tuple[bool, str]:
         try:
             first_message = await asyncio.wait_for(websocket.recv(), timeout=5)
             if not isinstance(first_message, str):
                 await self._send_error(websocket, 'First frame must be hello JSON')
-                return False
+                return False, ''
             hello = json.loads(first_message)
         except (asyncio.TimeoutError, json.JSONDecodeError):
             await self._send_error(websocket, 'Invalid or missing hello message')
-            return False
+            return False, ''
 
         if not isinstance(hello, dict):
             await self._send_error(websocket, 'Hello message must be a JSON object')
-            return False
+            return False, ''
         if hello.get('type') != 'hello' or hello.get('version') != 1:
             await self._send_error(websocket, 'Unsupported protocol')
-            return False
+            return False, ''
         if hello.get('sampleRate') != self._config.sample_rate:
             await self._send_error(websocket, 'Sample rate must be 48000 Hz')
-            return False
+            return False, ''
         if hello.get('channels') != self._config.channels:
             await self._send_error(websocket, 'Only mono audio is supported')
-            return False
+            return False, ''
         if hello.get('format') != 'pcm_s16le':
             await self._send_error(websocket, 'Audio format must be pcm_s16le')
-            return False
+            return False, ''
         if self._config.token and not secrets.compare_digest(
             str(hello.get('token', '')), self._config.token
         ):
             await self._send_error(websocket, 'Incorrect connection password')
-            return False
-        return True
+            return False, ''
+        return True, str(hello.get('device', '') or '')
 
     async def handler(self, websocket: ServerConnection) -> None:
         if websocket.request.path != '/mic':
@@ -74,10 +105,13 @@ class MicServer:
             return
 
         async with self._client_lock:
-            if not await self._validate_hello(websocket):
+            ok, device = await self._validate_hello(websocket)
+            if not ok:
                 return
             self._buffer.clear()
+            remote = str(websocket.remote_address)
             print(f'Phone connected: {websocket.remote_address}')
+            self._emit('connected', device=device, remote=remote)
             await websocket.send(json.dumps({'type': 'ready'}))
             try:
                 async for message in websocket:
@@ -90,6 +124,7 @@ class MicServer:
             finally:
                 self._buffer.clear()
                 print('Phone disconnected')
+                self._emit('disconnected')
 
     def _is_buffer_reset_message(self, message: str) -> bool:
         try:
@@ -102,13 +137,26 @@ class MicServer:
         }
 
     async def run(self) -> None:
-        async with serve(
-            self.handler,
-            self._config.host,
-            self._config.port,
-            max_size=256 * 1024,
-            max_queue=8,
-            ping_interval=20,
-            ping_timeout=20,
-        ):
-            await asyncio.Future()
+        self._loop = asyncio.get_running_loop()
+        self._stop_event = asyncio.Event()
+        try:
+            async with serve(
+                self.handler,
+                self._config.host,
+                self._config.port,
+                max_size=256 * 1024,
+                max_queue=8,
+                ping_interval=20,
+                ping_timeout=20,
+            ) as ws_server:
+                sockets = getattr(ws_server, 'sockets', None) or []
+                if sockets:
+                    self.bound_port = int(sockets[0].getsockname()[1])
+                else:
+                    self.bound_port = self._config.port
+                self._emit('waiting')
+                await self._stop_event.wait()
+        finally:
+            self.bound_port = None
+            self._loop = None
+            self._stop_event = None
