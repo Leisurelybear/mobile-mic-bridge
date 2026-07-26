@@ -233,6 +233,8 @@ class ReceiverController:
 
         advertiser = MdnsAdvertiser(port=config.port)
         try:
+            if self._stop_requested.is_set():
+                return
             addresses = tuple(local_ipv4_addresses())
             pairing_uri = ''
             if addresses:
@@ -244,6 +246,9 @@ class ReceiverController:
             with self._lock:
                 self._local_addresses = addresses
                 self._pairing_uri = pairing_uri
+
+            if self._stop_requested.is_set():
+                return
 
             buffer = AudioBuffer(
                 sample_rate=self._sample_rate,
@@ -261,6 +266,9 @@ class ReceiverController:
                 except Exception as error:  # noqa: BLE001 - surface as warning
                     with self._lock:
                         self._warning = f'mDNS 不可用: {error}'
+
+            if self._stop_requested.is_set():
+                return
 
             server = MicServer(
                 ServerConfig(

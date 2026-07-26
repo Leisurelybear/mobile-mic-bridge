@@ -42,12 +42,14 @@ class MicServer:
         self._client_lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
+        self._stop_requested = False
         self.bound_port: int | None = None
 
     def _emit(self, kind: str, **kwargs: str) -> None:
         self._on_event(ServerEvent(kind=kind, **kwargs))
 
     def request_stop(self) -> None:
+        self._stop_requested = True
         loop = self._loop
         stop_event = self._stop_event
         if loop is None or stop_event is None:
@@ -139,6 +141,11 @@ class MicServer:
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
+        if self._stop_requested:
+            self._stop_event.set()
+            self._loop = None
+            self._stop_event = None
+            return
         try:
             async with serve(
                 self.handler,
@@ -155,6 +162,8 @@ class MicServer:
                 else:
                     self.bound_port = self._config.port
                 self._emit('waiting')
+                if self._stop_requested:
+                    self._stop_event.set()
                 await self._stop_event.wait()
         finally:
             self.bound_port = None

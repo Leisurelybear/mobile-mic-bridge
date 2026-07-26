@@ -396,10 +396,21 @@ class ReceiverApp(ctk.CTk):
 
     def _stop(self) -> None:
         self._controller.stop()
+        snap = self._controller.snapshot()
+        if snap.running or snap.status not in {'stopped', 'error'}:
+            if snap.last_error:
+                self._message_var.set(snap.last_error)
+            else:
+                self._message_var.set('正在停止，请稍候…')
+            return
         self._set_running_ui(False)
         self._level_bar.set(0)
         self._clear_qr()
-        self._status_var.set('状态：空闲')
+        if snap.status == 'error' and snap.last_error:
+            self._status_var.set(f'状态：错误：{snap.last_error}')
+            self._message_var.set(snap.last_error)
+        else:
+            self._status_var.set('状态：空闲')
         self._addresses_var.set('本机地址：—')
         self._uri_var.set('')
         self._buffer_var.set('缓冲 0 ms · 欠载 0')

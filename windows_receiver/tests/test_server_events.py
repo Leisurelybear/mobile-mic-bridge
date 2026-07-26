@@ -92,6 +92,19 @@ def test_connect_disconnect_events_include_device() -> None:
     asyncio.run(scenario())
 
 
+def test_request_stop_before_run_exits_immediately() -> None:
+    async def scenario() -> None:
+        buffer = AudioBuffer(sample_rate=48000, channels=1)
+        server = MicServer(
+            ServerConfig(host='127.0.0.1', port=0, token='secret'),
+            buffer,
+        )
+        server.request_stop()
+        await asyncio.wait_for(server.run(), timeout=1)
+
+    asyncio.run(scenario())
+
+
 def test_rejected_event_on_bad_token() -> None:
     async def scenario() -> None:
         log = EventLog()
