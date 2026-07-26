@@ -69,4 +69,14 @@ jobs:
             echo "::error title=Flutter test log (base64)::$encoded"
           fi
           exit "$status"
-      - run: flutter build apk --debug
+      - name: Build Android debug APK
+        shell: bash
+        run: |
+          set +e
+          flutter build apk --debug 2>&1 | tee /tmp/flutter-build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            encoded=$(base64 -w 0 /tmp/flutter-build.log)
+            echo "::error title=Flutter build log (base64)::$encoded"
+          fi
+          exit "$status"
