@@ -83,11 +83,23 @@ class MicServer:
                 async for message in websocket:
                     if isinstance(message, bytes):
                         self._buffer.write(message)
+                    elif self._is_buffer_reset_message(message):
+                        self._buffer.clear()
             except ConnectionClosed:
                 pass
             finally:
                 self._buffer.clear()
                 print('Phone disconnected')
+
+    def _is_buffer_reset_message(self, message: str) -> bool:
+        try:
+            payload = json.loads(message)
+        except json.JSONDecodeError:
+            return False
+        return isinstance(payload, dict) and payload.get('type') in {
+            'pause',
+            'resume',
+        }
 
     async def run(self) -> None:
         async with serve(

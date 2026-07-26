@@ -2,24 +2,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import socket
 
 from .audio import AudioOutput, list_output_devices
 from .buffer import AudioBuffer
+from .discovery import MdnsAdvertiser, local_ipv4_addresses
+from .pairing import print_pairing_qr
 from .server import MicServer, ServerConfig
-
-
-def _local_addresses() -> list[str]:
-    addresses: set[str] = set()
-    try:
-        results = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
-        for result in results:
-            address = result[4][0]
-            if not address.startswith('127.'):
-                addresses.add(address)
-    except socket.gaierror:
-        pass
-    return sorted(addresses)
 
 
 def _device_value(value: str | None) -> int | str | None:
@@ -39,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--token', default='', help='Optional connection password')
     parser.add_argument('--latency-ms', type=int, default=400)
     parser.add_argument('--prebuffer-ms', type=int, default=80)
+    parser.add_argument('--no-discovery', action='store_true')
+    parser.add_argument('--no-qr', action='store_true')
     parser.add_argument('--list-devices', action='store_true')
     return parser
 
@@ -82,13 +72,30 @@ def main() -> None:
     print(f'Listening on port {args.port}')
     if not args.token:
         print('Warning: no connection password is configured')
-    addresses = _local_addresses()
+    addresses = local_ipv4_addresses()
     if addresses:
         print('Enter one of these addresses on the phone:')
         for address in addresses:
             print(f'  {address}')
     else:
         print('Run ipconfig to find this computer IPv4 address.')
+    if addresses and not args.no_qr:
+        try:
+            print_pairing_qr(
+                host=addresses[0],
+                port=args.port,
+                token=args.token,
+            )
+        except Exception as error:
+            print(f'Warning: pairing QR unavailable: {error}')
+
+    advertiser = MdnsAdvertiser(port=args.port)
+    if not args.no_discovery:
+        try:
+            advertiser.start()
+            print('Automatic discovery enabled: _mobilemic._tcp.local')
+        except Exception as error:
+            print(f'Warning: automatic discovery unavailable: {error}')
 
     try:
         with AudioOutput(
@@ -101,6 +108,8 @@ def main() -> None:
             asyncio.run(server.run())
     except KeyboardInterrupt:
         print('\nReceiver stopped')
+    finally:
+        advertiser.close()
 
 
 if __name__ == '__main__':

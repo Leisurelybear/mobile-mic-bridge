@@ -47,8 +47,14 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Capture audio and stream it to your Windows computer.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Scan a Mobile Mic Bridge pairing QR code from Windows.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Connect to the Mobile Mic Bridge receiver on your local Wi-Fi.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_mobilemic._tcp</string>
+    </array>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

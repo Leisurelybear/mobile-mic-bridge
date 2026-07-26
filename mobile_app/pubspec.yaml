@@ -9,7 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  mobile_scanner: 7.4.0
+  nsd: 4.1.0
   record: 6.2.1
+  shared_preferences: 2.5.5
   wakelock_plus: 1.7.0
 
 dev_dependencies:

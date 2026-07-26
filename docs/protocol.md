@@ -11,6 +11,22 @@
 
 WebSocket 地址为 `/mic`，默认 TCP 端口为 `8765`。文本帧传输控制 JSON，二进制帧传输原始音频。同一时间只接受一个手机连接。
 
+The Windows receiver advertises `_mobilemic._tcp.local.` with mDNS/DNS-SD. The service TXT record contains protocol version and audio format metadata, but never contains the connection password.
+
+Windows 接收端通过 mDNS/DNS-SD 广播 `_mobilemic._tcp.local.`。TXT 记录只包含协议版本和音频格式，不包含连接密码。
+
+## QR Pairing / 二维码配对
+
+When the receiver starts, it may print an ASCII QR code containing a URI in this form:
+
+```text
+mobilemic://connect?host=192.168.1.20&port=8765&token=optional
+```
+
+The mobile app validates the scheme, host, port, and optional token before filling the connection form. The QR token is used for the current session but is not persisted by the app.
+
+接收端启动时可以在终端显示 ASCII 二维码，其内容使用上述 `mobilemic://` URI。手机会校验协议、地址、端口和可选密码后填写连接表单。二维码中的密码只用于当前运行，不会持久化。
+
 ## Handshake / 握手
 
 The first frame must be a JSON object with these fields:
@@ -41,6 +57,12 @@ The server responds with a JSON object whose type is `ready`, or an error object
 - A PCM sample may span two WebSocket messages; receivers preserve incomplete trailing bytes
 
 音频固定为 48 kHz、单声道、16 位小端有符号 PCM。建议每个二进制帧携带约 10 到 40 毫秒音频。音频帧没有额外包头，顺序就是 WebSocket 的可靠传输顺序。
+
+## Pause and Resume / 暂停与继续
+
+The phone keeps the WebSocket connection open while paused and sends a text control frame whose type is `pause`. On resume it sends type `resume` and restarts microphone capture. The receiver clears its jitter buffer for both messages.
+
+手机暂停时保持 WebSocket 连接，仅停止麦克风采集并发送类型为 `pause` 的文本控制帧。继续时发送 `resume` 并重新启动录音。接收端收到两种消息时都会清空抖动缓冲。
 
 ## Compatibility / 兼容性
 

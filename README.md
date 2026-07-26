@@ -12,6 +12,11 @@ The mobile app captures mono PCM audio and streams it over a WebSocket on the lo
 - 48 kHz, mono, signed 16-bit PCM transport
 - Bounded jitter buffer with underflow recovery
 - Optional connection password
+- Automatic Windows receiver discovery with mDNS/DNS-SD
+- QR-code pairing fallback when mDNS is unavailable
+- Remembers the last receiver address, port, and transmit gain
+- Phone-side transmit gain from 0% to 200%
+- Repeatable pause and resume without reconnecting
 - Selectable Windows output device
 - Automatic Android APK, unsigned iOS app archive, and Windows x64/ARM64 EXE releases
 - English and Chinese documentation
@@ -76,11 +81,15 @@ An iOS build requires macOS, Xcode, an Apple developer team, and normal code sig
 ### 3. Connect
 
 1. Put the phone and PC on the same Wi-Fi network.
-2. Enter the PC IPv4 address, port `8765`, and the same optional password.
+2. Select the discovered PC, scan the QR code printed by Windows, or enter its IPv4 address and port `8765` manually.
 3. Tap `开始传输`.
 4. In the target Windows application, choose the virtual cable output as the microphone.
 
 The app keeps the screen awake while streaming. Moving it to the background still stops the current MVP session. Use headphones to prevent the PC speakers from feeding back into the phone microphone.
+
+The volume slider changes the PCM level sent to Windows. `100%` preserves the captured level, `0%` mutes it, and values above `100%` may clip loud samples.
+
+The app remembers the last host, port, and gain. The connection password is intentionally kept only for the current app session and is not persisted.
 
 ## Receiver Options
 
@@ -91,6 +100,8 @@ The app keeps the screen awake while streaming. Moving it to the background stil
 --token           Optional connection password
 --latency-ms      Maximum buffered audio, default 400
 --prebuffer-ms    Startup and recovery buffer, default 80
+--no-discovery    Disable mDNS advertisement
+--no-qr           Do not print the terminal pairing QR code
 --list-devices    List output devices and exit
 ```
 

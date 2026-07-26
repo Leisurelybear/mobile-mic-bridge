@@ -101,3 +101,10 @@ def test_websocket_round_trip_preserves_split_sample() -> None:
                 assert buffer.stats().queued_bytes == 2
 
     asyncio.run(scenario())
+
+
+def test_pause_control_clears_buffer() -> None:
+    server = make_server()
+    assert server._is_buffer_reset_message(json.dumps({'type': 'pause'})) is True
+    assert server._is_buffer_reset_message(json.dumps({'type': 'resume'})) is True
+    assert server._is_buffer_reset_message(json.dumps({'type': 'other'})) is False
