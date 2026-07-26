@@ -58,5 +58,16 @@ jobs:
             done < /tmp/flutter-analyze.log
           fi
           exit "$status"
-      - run: flutter test
+      - name: Flutter test
+        shell: bash
+        run: |
+          set +e
+          flutter test 2>&1 | tee /tmp/flutter-test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < /tmp/flutter-test.log
+          fi
+          exit "$status"
       - run: flutter build apk --debug
