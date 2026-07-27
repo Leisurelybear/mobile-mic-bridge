@@ -54,19 +54,37 @@ Windows 普通应用无法在不安装签名音频驱动的情况下创建系统
 
 #### 开发者：从源码运行
 
+仓库根目录提供启动脚本（会自动创建/使用 `windows_receiver/.venv` 并安装依赖）：
+
+```powershell
+# 图形界面（默认，含网页配对二维码）
+.\start-receiver.ps1
+# 或双击
+.\start-receiver.bat
+
+# 命令行接收端
+.\start-receiver.ps1 -Cli -ListDevices
+.\start-receiver.ps1 -Cli -Device 12 -Token 自定义密码
+
+# 强制重建虚拟环境并重装
+.\start-receiver.ps1 -Rebuild
+```
+
+首次运行后也可直接调用：
+
+```powershell
+.\windows_receiver\.venv\Scripts\mobile-mic-receiver-gui.exe
+.\windows_receiver\.venv\Scripts\mobile-mic-receiver.exe --list-devices
+```
+
+也可以手动：
+
 ```powershell
 cd windows_receiver
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
 mobile-mic-receiver-gui
-```
-
-命令行入口仍可用：
-
-```powershell
-mobile-mic-receiver --list-devices
-mobile-mic-receiver --device 12 --token 自定义密码
 ```
 
 ### 2. 用手机浏览器连接（推荐，免装 App）

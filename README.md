@@ -54,19 +54,37 @@ Settings are stored at `%APPDATA%\MobileMicBridge\settings.json`, including the 
 
 #### Developers: run from source
 
+Root launchers create/use `windows_receiver/.venv` and install deps if needed:
+
+```powershell
+# GUI (default, web pairing QR)
+.\start-receiver.ps1
+# or double-click
+.\start-receiver.bat
+
+# Console receiver
+.\start-receiver.ps1 -Cli -ListDevices
+.\start-receiver.ps1 -Cli -Device 12 -Token choose-a-password
+
+# Force recreate venv and reinstall
+.\start-receiver.ps1 -Rebuild
+```
+
+After the first run you can also call:
+
+```powershell
+.\windows_receiver\.venv\Scripts\mobile-mic-receiver-gui.exe
+.\windows_receiver\.venv\Scripts\mobile-mic-receiver.exe --list-devices
+```
+
+Manual steps:
+
 ```powershell
 cd windows_receiver
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
 mobile-mic-receiver-gui
-```
-
-The console entry point remains available:
-
-```powershell
-mobile-mic-receiver --list-devices
-mobile-mic-receiver --device 12 --token choose-a-password
 ```
 
 ### 2. Connect with the phone browser (recommended, no app install)
