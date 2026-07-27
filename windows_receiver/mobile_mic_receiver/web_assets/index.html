@@ -2,14 +2,48 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
     <title>Mobile Mic Bridge</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
+    <main class="card">
       <h1>Mobile Mic Bridge</h1>
-      <p id="status">占位页面 — Task 4 替换完整客户端</p>
+      <p class="hint">
+        建议佩戴耳机，并尽量保持本页在前台。浏览器降噪/回声消除默认开启，但不能保证锁屏后继续录音。
+      </p>
+      <p id="status" class="status">状态：空闲</p>
+      <p id="error" class="error" hidden></p>
+      <p id="bg-warn" class="warn" hidden>
+        页面已进入后台，传输可能被系统中断。
+      </p>
+
+      <div class="row">
+        <button id="btn-start" type="button">开始传输</button>
+        <button id="btn-pause" type="button" disabled>暂停</button>
+        <button id="btn-stop" type="button" disabled>停止</button>
+      </div>
+
+      <label class="block">
+        发送音量 <span id="gain-label">100%</span>
+        <input id="gain" type="range" min="0" max="200" value="100" />
+      </label>
+
+      <fieldset>
+        <legend>音频处理</legend>
+        <label><input id="echo" type="checkbox" checked /> 回声消除</label>
+        <label><input id="noise" type="checkbox" checked /> 噪音抑制</label>
+        <label><input id="agc" type="checkbox" checked /> 自动增益</label>
+      </fieldset>
+
+      <label class="block">
+        输入电平
+        <progress id="level" max="1" value="0"></progress>
+      </label>
     </main>
     <script src="/app.js"></script>
   </body>
