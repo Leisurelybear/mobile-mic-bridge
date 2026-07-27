@@ -15,12 +15,14 @@ from mobile_mic_receiver.controller import (
     ControllerSnapshot,
     ReceiverController,
 )
+from mobile_mic_receiver.gui.setup_wizard import SetupWizard
 from mobile_mic_receiver.pairing import make_qr_image
 from mobile_mic_receiver.settings import (
     ReceiverSettings,
     load_settings,
     save_settings,
 )
+from mobile_mic_receiver.setup_guide import should_show_setup_wizard
 
 STATUS_LABELS = {
     'stopped': '空闲',
@@ -56,6 +58,8 @@ class ReceiverApp(ctk.CTk):
         self._qr_host = ''
         self._qr_port = 8765
         self._last_qr_key = ''
+        self._setup_completed = bool(self._settings.setup_completed)
+        self._wizard: SetupWizard | None = None
 
         self._build_widgets()
         self._refresh_devices()
@@ -68,6 +72,8 @@ class ReceiverApp(ctk.CTk):
 
         self.protocol('WM_DELETE_WINDOW', self._on_close)
         self.after(50, self._tick)
+        if should_show_setup_wizard(setup_completed=self._setup_completed):
+            self.after(200, self._open_setup_wizard)
 
     def _build_widgets(self) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -83,6 +89,13 @@ class ReceiverApp(ctk.CTk):
         ctk.CTkLabel(header, textvariable=self._status_var).grid(
             row=0, column=1, sticky='e', padx=12, pady=10
         )
+        self._wizard_btn = ctk.CTkButton(
+            header,
+            text='快速设置向导',
+            width=110,
+            command=self._open_setup_wizard,
+        )
+        self._wizard_btn.grid(row=0, column=2, sticky='e', padx=(0, 12), pady=10)
 
         body = ctk.CTkFrame(self)
         body.grid(row=1, column=0, sticky='nsew', padx=16, pady=8)
@@ -309,6 +322,7 @@ class ReceiverApp(ctk.CTk):
             prebuffer_ms=prebuffer,
             discovery_enabled=bool(self._discovery_var.get()),
             window_geometry=self.geometry(),
+            setup_completed=self._setup_completed,
         )
 
     def _save_settings_now(self) -> None:
@@ -326,12 +340,44 @@ class ReceiverApp(ctk.CTk):
         self._latency_var.set(str(settings.latency_ms))
         self._prebuffer_var.set(str(settings.prebuffer_ms))
         self._discovery_var.set(settings.discovery_enabled)
+        self._setup_completed = bool(settings.setup_completed)
         if settings.device_name:
             for index, name, _channels in self._devices:
                 if name == settings.device_name:
                     self._device_var.set(self._format_device_label(index, name))
                     self._update_device_hint()
                     break
+
+    def _open_setup_wizard(self) -> None:
+        if self._wizard is not None and self._wizard.winfo_exists():
+            self._wizard.focus()
+            return
+        self._wizard = SetupWizard(
+            self,
+            on_apply_device=self._apply_recommended_device,
+            on_finished=self._on_setup_finished,
+        )
+
+    def _apply_recommended_device(self, device_name: str) -> None:
+        self._refresh_devices()
+        for index, name, _channels in self._devices:
+            if name == device_name:
+                self._device_var.set(self._format_device_label(index, name))
+                self._update_device_hint()
+                self._message_var.set(f'已自动选择输出设备：{name}')
+                self._save_settings_now()
+                return
+        self._message_var.set(
+            f'未找到设备“{device_name}”，请安装后点刷新再选 ★推荐 设备'
+        )
+
+    def _on_setup_finished(self) -> None:
+        self._setup_completed = True
+        self._wizard = None
+        self._save_settings_now()
+        self._message_var.set(
+            '设置完成：启动接收 → 手机扫码开麦 → Discord/游戏麦克风选 CABLE Output'
+        )
 
     def _format_device_label(self, index: int, name: str) -> str:
         if is_recommended_output_name(name):

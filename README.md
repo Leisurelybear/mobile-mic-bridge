@@ -45,10 +45,12 @@ The virtual cable is required because normal Windows applications cannot create 
 
 1. Install a virtual audio cable. With VB-CABLE, the receiver sends audio to `CABLE Input`, while voice applications select `CABLE Output` as their microphone.
 2. Download `mobile-mic-receiver-windows-x64.exe` from [Releases](https://github.com/Leisurelybear/mobile-mic-bridge/releases) (use the ARM64 build on ARM PCs).
-3. Double-click the GUI receiver.
-4. Choose the output device (for example `CABLE Input`), set a connection password, and click **Start**.
-5. Allow TCP port `8765` when Windows Firewall asks.
-6. The window shows local addresses and a **web pairing QR code** (`https://...:8765/`). On first open, accept the self-signed certificate warning in the phone browser.
+3. Double-click the GUI receiver (or run `.\start-receiver.ps1`). A **setup wizard** opens on first launch.
+4. Follow the wizard to install/detect VB-CABLE and auto-select `CABLE Input`. You can reopen **快速设置向导** anytime from the main window.
+5. Set a connection password and click **Start**.
+6. Allow TCP port `8765` when Windows Firewall asks.
+7. The window shows local addresses and a **web pairing QR code** (`https://...:8765/`). On first open, accept the self-signed certificate warning in the phone browser.
+8. In Discord/games/meetings, set the microphone to **CABLE Output**.
 
 Settings are stored at `%APPDATA%\MobileMicBridge\settings.json`, including the connection password in plain text for local convenience (not a secure vault).
 

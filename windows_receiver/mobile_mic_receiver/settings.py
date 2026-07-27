@@ -15,6 +15,7 @@ class ReceiverSettings:
     prebuffer_ms: int = 80
     discovery_enabled: bool = True
     window_geometry: str = ''
+    setup_completed: bool = False
 
 
 def default_settings_path() -> Path:
@@ -78,5 +79,8 @@ def _normalize(raw: dict, defaults: ReceiverSettings) -> ReceiverSettings:
         ),
         window_geometry=str(
             raw.get('window_geometry', defaults.window_geometry) or ''
+        ),
+        setup_completed=bool(
+            raw.get('setup_completed', defaults.setup_completed)
         ),
     )

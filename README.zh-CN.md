@@ -45,10 +45,12 @@ Windows 普通应用无法在不安装签名音频驱动的情况下创建系统
 
 1. 安装虚拟音频线。以 VB-CABLE 为例，接收端输出到 `CABLE Input`，语音软件把 `CABLE Output` 选为麦克风。
 2. 从 [Releases](https://github.com/Leisurelybear/mobile-mic-bridge/releases) 下载 `mobile-mic-receiver-windows-x64.exe`（ARM 电脑下载 ARM64 版本）。
-3. 双击运行接收端图形界面。
-4. 选择输出设备（例如 `CABLE Input`），设置连接密码，点击 **启动接收**。
-5. Windows 防火墙弹窗出现时，允许 TCP 端口 `8765` 通过专用网络。
-6. 窗口会显示本机地址和**网页配对二维码**（`https://...:8765/`）。手机首次打开若提示证书不受信任，选择“继续访问/高级-继续”。
+3. 双击运行接收端图形界面（或 `.\start-receiver.ps1`）。首次会弹出**快速设置向导**。
+4. 按向导安装/检测 VB-CABLE，并自动选择 `CABLE Input`；也可随时点窗口右上角「快速设置向导」。
+5. 设置连接密码，点击 **启动接收**。
+6. Windows 防火墙弹窗出现时，允许 TCP 端口 `8765` 通过专用网络。
+7. 窗口会显示本机地址和**网页配对二维码**（`https://...:8765/`）。手机首次打开若提示证书不受信任，选择“继续访问/高级-继续”。
+8. 在 Discord/游戏/会议软件中，把麦克风选为 **CABLE Output**。
 
 设置会保存在 `%APPDATA%\MobileMicBridge\settings.json`，包括连接密码（明文本地存储，仅图方便，不是保险库）。
 
