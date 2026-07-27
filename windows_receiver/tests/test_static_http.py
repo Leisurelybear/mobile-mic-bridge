@@ -1,4 +1,4 @@
-from mobile_mic_receiver.static_http import handle_http, resolve_static
+from mobile_mic_receiver.static_http import handle_http, load_asset, resolve_static
 
 
 def test_resolve_root_and_index() -> None:
@@ -45,3 +45,14 @@ def test_handle_post_method_not_allowed() -> None:
 
 def test_handle_unknown_returns_none() -> None:
     assert handle_http('/nope', 'GET') is None
+
+
+def test_asset_root_frozen(monkeypatch, tmp_path) -> None:
+    import sys
+
+    assets = tmp_path / 'mobile_mic_receiver' / 'web_assets'
+    assets.mkdir(parents=True)
+    (assets / 'index.html').write_text('ok', encoding='utf-8')
+    monkeypatch.setattr(sys, 'frozen', True, raising=False)
+    monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
+    assert load_asset('index.html') == b'ok'

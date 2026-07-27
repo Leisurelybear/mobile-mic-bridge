@@ -41,6 +41,7 @@ jobs:
           --collect-all qrcode
           --collect-all customtkinter
           --collect-all PIL
+          --add-data "mobile_mic_receiver/web_assets;mobile_mic_receiver/web_assets"
           gui_main.py
       - uses: actions/upload-artifact@v7
         with:
