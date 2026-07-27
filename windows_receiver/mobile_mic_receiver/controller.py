@@ -9,6 +9,7 @@ from .buffer import AudioBuffer, BufferStats
 from .discovery import MdnsAdvertiser, local_ipv4_addresses
 from .pairing import build_pairing_uri, build_web_pairing_uri
 from .server import MicServer, ServerConfig, ServerEvent
+from .tls_certs import default_tls_dir, ensure_tls_material
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class ControllerConfig:
     latency_ms: int = 400
     prebuffer_ms: int = 80
     discovery_enabled: bool = True
+    tls_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,8 @@ class ControllerSnapshot:
     pairing_uri: str
     app_pairing_uri: str
     bound_port: int | None
+    tls_enabled: bool
+    tls_cert_path: str
 
 
 class _PeakBuffer:
@@ -87,6 +91,8 @@ class ReceiverController:
         self._pairing_uri = ''
         self._app_pairing_uri = ''
         self._bound_port: int | None = None
+        self._tls_enabled = True
+        self._tls_cert_path = ''
         self._sample_rate = 48000
         self._channels = 1
         self._sample_width = 2
@@ -112,6 +118,8 @@ class ReceiverController:
             self._pairing_uri = ''
             self._app_pairing_uri = ''
             self._bound_port = None
+            self._tls_enabled = config.tls_enabled
+            self._tls_cert_path = ''
             self._server = None
             self._buffer = None
             thread = threading.Thread(
@@ -194,6 +202,8 @@ class ReceiverController:
                 pairing_uri=self._pairing_uri,
                 app_pairing_uri=self._app_pairing_uri,
                 bound_port=self._bound_port,
+                tls_enabled=self._tls_enabled,
+                tls_cert_path=self._tls_cert_path,
             )
 
     def _on_event(self, event: ServerEvent) -> None:
@@ -240,6 +250,7 @@ class ReceiverController:
             if self._stop_requested.is_set():
                 return
             addresses = tuple(local_ipv4_addresses())
+            scheme = 'https' if config.tls_enabled else 'http'
             pairing_uri = ''
             app_pairing_uri = ''
             if addresses:
@@ -247,6 +258,7 @@ class ReceiverController:
                     host=addresses[0],
                     port=config.port,
                     token=config.token,
+                    scheme=scheme,
                 )
                 app_pairing_uri = build_pairing_uri(
                     host=addresses[0],
@@ -260,6 +272,21 @@ class ReceiverController:
 
             if self._stop_requested.is_set():
                 return
+
+            cert_path = ''
+            key_path = ''
+            if config.tls_enabled:
+                hosts = addresses or ('127.0.0.1',)
+                cert_file, key_file = ensure_tls_material(
+                    default_tls_dir(), hosts=hosts
+                )
+                cert_path = str(cert_file)
+                key_path = str(key_file)
+                with self._lock:
+                    self._tls_cert_path = cert_path
+                    self._warning = (
+                        '网页使用自签名 HTTPS：手机首次打开时需在浏览器中继续访问'
+                    )
 
             buffer = AudioBuffer(
                 sample_rate=self._sample_rate,
@@ -276,7 +303,11 @@ class ReceiverController:
                     advertiser.start()
                 except Exception as error:  # noqa: BLE001 - surface as warning
                     with self._lock:
-                        self._warning = f'mDNS 不可用: {error}'
+                        existing = self._warning
+                        note = f'mDNS 不可用: {error}'
+                        self._warning = (
+                            f'{existing}；{note}' if existing else note
+                        )
 
             if self._stop_requested.is_set():
                 return
@@ -288,6 +319,9 @@ class ReceiverController:
                     sample_rate=self._sample_rate,
                     channels=self._channels,
                     token=config.token,
+                    tls_enabled=config.tls_enabled,
+                    tls_cert_path=cert_path,
+                    tls_key_path=key_path,
                 ),
                 peak_buffer,  # type: ignore[arg-type]
                 on_event=self._on_event,

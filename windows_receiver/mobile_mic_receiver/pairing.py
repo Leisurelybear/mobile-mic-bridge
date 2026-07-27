@@ -11,18 +11,27 @@ def build_pairing_uri(*, host: str, port: int, token: str) -> str:
     return f'mobilemic://connect?{urlencode(parameters)}'
 
 
-def build_web_pairing_uri(*, host: str, port: int, token: str) -> str:
-    base = f'http://{host}:{port}/'
+def build_web_pairing_uri(
+    *, host: str, port: int, token: str, scheme: str = 'https'
+) -> str:
+    scheme_name = (scheme or 'https').lower()
+    if scheme_name not in {'http', 'https'}:
+        raise ValueError(f'unsupported web pairing scheme: {scheme}')
+    base = f'{scheme_name}://{host}:{port}/'
     if not token:
         return base
     return f'{base}?{urlencode({"token": token})}'
 
 
-def _pairing_data(*, host: str, port: int, token: str, mode: str) -> str:
+def _pairing_data(
+    *, host: str, port: int, token: str, mode: str, scheme: str = 'https'
+) -> str:
     if mode == 'app':
         return build_pairing_uri(host=host, port=port, token=token)
     if mode == 'web':
-        return build_web_pairing_uri(host=host, port=port, token=token)
+        return build_web_pairing_uri(
+            host=host, port=port, token=token, scheme=scheme
+        )
     raise ValueError(f'unsupported pairing mode: {mode}')
 
 
@@ -33,11 +42,14 @@ def make_qr_image(
     token: str,
     box_size: int = 6,
     mode: str = 'web',
+    scheme: str = 'https',
 ):
     import qrcode
     from PIL import Image
 
-    pairing_uri = _pairing_data(host=host, port=port, token=token, mode=mode)
+    pairing_uri = _pairing_data(
+        host=host, port=port, token=token, mode=mode, scheme=scheme
+    )
     code = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -53,14 +65,19 @@ def make_qr_image(
 
 
 def print_pairing_qr(
-    *, host: str, port: int, token: str, mode: str = 'web'
+    *,
+    host: str,
+    port: int,
+    token: str,
+    mode: str = 'web',
+    scheme: str = 'https',
 ) -> None:
     import qrcode
 
     modes = ['web', 'app'] if mode == 'both' else [mode]
     for item in modes:
         pairing_uri = _pairing_data(
-            host=host, port=port, token=token, mode=item
+            host=host, port=port, token=token, mode=item, scheme=scheme
         )
         code = qrcode.QRCode(
             version=None,

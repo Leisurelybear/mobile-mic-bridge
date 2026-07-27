@@ -169,7 +169,20 @@
   }
 
   async function openMic() {
-    mediaStream = await navigator.mediaDevices.getUserMedia(audioConstraints());
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
+      const insecure =
+        location.protocol !== 'https:' && location.hostname !== 'localhost';
+      if (insecure) {
+        throw new Error(
+          '当前页面不是 HTTPS，手机浏览器禁止访问麦克风。请用接收端生成的 https:// 二维码打开，并在证书警告页选择继续访问。'
+        );
+      }
+      throw new Error(
+        '当前浏览器不支持麦克风采集（navigator.mediaDevices 不可用）。'
+      );
+    }
+    mediaStream = await mediaDevices.getUserMedia(audioConstraints());
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     audioContext = new AudioCtx({ sampleRate: TARGET_RATE });
     if (audioContext.state === 'suspended') await audioContext.resume();

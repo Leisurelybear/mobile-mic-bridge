@@ -48,7 +48,7 @@ The virtual cable is required because normal Windows applications cannot create 
 3. Double-click the GUI receiver.
 4. Choose the output device (for example `CABLE Input`), set a connection password, and click **Start**.
 5. Allow TCP port `8765` when Windows Firewall asks.
-6. The window shows local addresses and a **web pairing QR code** (`http://...:8765/`).
+6. The window shows local addresses and a **web pairing QR code** (`https://...:8765/`). On first open, accept the self-signed certificate warning in the phone browser.
 
 Settings are stored at `%APPDATA%\MobileMicBridge\settings.json`, including the connection password in plain text for local convenience (not a secure vault).
 
@@ -90,7 +90,7 @@ mobile-mic-receiver-gui
 ### 2. Connect with the phone browser (recommended, no app install)
 
 1. Put the phone and PC on the same Wi-Fi network.
-2. Scan the **网页** QR code in the Windows window (or open `http://PC-IP:8765/?token=...`).
+2. Scan the **网页** QR code in the Windows window (or open `https://PC-IP:8765/?token=...`). Accept the certificate warning once if prompted.
 3. Allow microphone access, keep the page in the foreground, and tap **开始传输**.
 4. Prefer headphones so PC speaker audio is less likely to re-enter the phone mic. Browser echo cancellation / noise suppression / AGC are on by default.
 5. In the target Windows application, choose the virtual cable output as the microphone.
@@ -136,6 +136,7 @@ The developer console entry `mobile-mic-receiver` supports:
 --no-discovery    Disable mDNS advertisement
 --no-qr           Do not print the terminal pairing QR code
 --qr-mode         web|app|both (default web page URL)
+--no-tls          Disable HTTPS/WSS (phones usually cannot open mic over plain HTTP)
 --list-devices    List output devices and exit
 ```
 
@@ -189,6 +190,7 @@ GitHub Actions cannot produce an installable signed iOS IPA without repository-s
 - Audio is uncompressed PCM, so typical bandwidth is about 768 kbit/s before WebSocket overhead.
 - The current transport is optimized for a local Wi-Fi network, not the public internet.
 - Windows microphone exposure depends on a separately installed virtual audio cable.
+- The browser web client requires HTTPS on most phones; the receiver enables self-signed TLS by default. Accept the certificate warning once.
 - The browser web client does not guarantee background or lock-screen capture; keep the page foreground when possible.
 - Browser echo cancellation quality varies by device and OS; headphones are still recommended.
 - iOS Safari support is best-effort compared with Android Chrome.

@@ -288,9 +288,23 @@ class StreamingSessionController extends ChangeNotifier {
     final socketHost = target.host.contains(':') && !target.host.startsWith('[')
         ? '[${target.host}]'
         : target.host;
-    final socket = await _socketFactory
-        .connect(Uri.parse('ws://$socketHost:${target.port}/mic'))
-        .timeout(const Duration(seconds: 8));
+    // Prefer wss for the receiver-hosted self-signed TLS endpoint; fall
+    // back to plain ws if the secure handshake is refused/unavailable.
+    StreamingSocket? socket;
+    Object? lastError;
+    for (final scheme in <String>['wss', 'ws']) {
+      try {
+        socket = await _socketFactory
+            .connect(Uri.parse('$scheme://$socketHost:${target.port}/mic'))
+            .timeout(const Duration(seconds: 8));
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (socket == null) {
+      throw BridgeException(_safeError('连接失败', lastError ?? 'unknown'));
+    }
     if (!_isCurrent(sessionId)) {
       await socket.close();
       return;
@@ -738,7 +752,15 @@ class RecordAudioCapture implements AudioCapture {
 class IoStreamingSocketFactory implements StreamingSocketFactory {
   @override
   Future<StreamingSocket> connect(Uri uri) async {
-    final socket = await WebSocket.connect(uri.toString());
+    // Accept the receiver's self-signed LAN certificate for wss://.
+    final socket = await WebSocket.connect(
+      uri.toString(),
+      customClient: uri.scheme == 'wss'
+          ? (HttpClient()
+            ..badCertificateCallback =
+                (X509Certificate cert, String host, int port) => true)
+          : null,
+    );
     socket.pingInterval = const Duration(seconds: 10);
     return IoStreamingSocket(socket);
   }

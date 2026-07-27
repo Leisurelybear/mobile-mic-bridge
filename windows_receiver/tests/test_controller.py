@@ -140,7 +140,7 @@ def test_stop_during_audio_open_exits_cleanly() -> None:
             assert controller.snapshot().running is False
 
 
-def test_snapshot_pairing_uri_is_http_web() -> None:
+def test_snapshot_pairing_uri_is_https_web() -> None:
     controller = ReceiverController()
     with patch('mobile_mic_receiver.controller.AudioOutput', DummyAudio), patch(
         'mobile_mic_receiver.controller.MdnsAdvertiser'
@@ -161,8 +161,9 @@ def test_snapshot_pairing_uri_is_http_web() -> None:
             while time.time() < deadline and not snap.pairing_uri:
                 time.sleep(0.05)
                 snap = controller.snapshot()
-            assert snap.pairing_uri.startswith('http://192.168.1.20:18769/')
+            assert snap.pairing_uri.startswith('https://192.168.1.20:18769/')
             assert 'token=secret' in snap.pairing_uri
             assert snap.app_pairing_uri.startswith('mobilemic://connect?')
+            assert snap.tls_enabled is True
         finally:
             controller.stop()

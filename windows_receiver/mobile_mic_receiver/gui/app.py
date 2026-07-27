@@ -439,14 +439,22 @@ class ReceiverApp(ctk.CTk):
     def _qr_mode_key(self) -> str:
         return 'app' if self._qr_mode.get() == 'App' else 'web'
 
-    def _update_qr(self, host: str, port: int, token: str) -> None:
+    def _update_qr(
+        self, host: str, port: int, token: str, *, tls_enabled: bool = True
+    ) -> None:
         mode = self._qr_mode_key()
-        key = f'{mode}|{host}|{port}|{token}'
+        scheme = 'https' if tls_enabled else 'http'
+        key = f'{mode}|{scheme}|{host}|{port}|{token}'
         if key == self._last_qr_key and self._qr_photo is not None:
             return
         try:
             image = make_qr_image(
-                host=host, port=port, token=token, box_size=5, mode=mode
+                host=host,
+                port=port,
+                token=token,
+                box_size=5,
+                mode=mode,
+                scheme=scheme,
             )
             image = image.resize((220, 220), Image.Resampling.NEAREST)
             self._qr_photo = ImageTk.PhotoImage(image)
@@ -473,7 +481,12 @@ class ReceiverApp(ctk.CTk):
         port = snap.bound_port or self._qr_port or int(self._port_var.get() or 8765)
         if host:
             self._last_qr_key = ''
-            self._update_qr(host, port, self._token_var.get())
+            self._update_qr(
+                host,
+                port,
+                self._token_var.get(),
+                tls_enabled=snap.tls_enabled,
+            )
 
     def _copy_uri(self) -> None:
         uri = self._uri_var.get().strip()
@@ -535,7 +548,12 @@ class ReceiverApp(ctk.CTk):
                 host = snap.local_addresses[0] if snap.local_addresses else ''
                 port = snap.bound_port or int(self._port_var.get() or 8765)
                 if host:
-                    self._update_qr(host, port, self._token_var.get())
+                    self._update_qr(
+                        host,
+                        port,
+                        self._token_var.get(),
+                        tls_enabled=snap.tls_enabled,
+                    )
             elif not snap.local_addresses:
                 self._uri_var.set('')
                 self._qr_label.configure(

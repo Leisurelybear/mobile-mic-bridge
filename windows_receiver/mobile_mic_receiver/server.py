@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.datastructures import Headers
@@ -13,6 +15,7 @@ from websockets.http11 import Request, Response
 
 from .buffer import AudioBuffer
 from .static_http import handle_http
+from .tls_certs import build_server_ssl_context
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,9 @@ class ServerConfig:
     sample_rate: int = 48000
     channels: int = 1
     token: str = ''
+    tls_enabled: bool = False
+    tls_cert_path: str = ''
+    tls_key_path: str = ''
 
 
 @dataclass(frozen=True)
@@ -164,6 +170,17 @@ class MicServer:
             b'Not Found',
         )
 
+    def _ssl_context(self) -> ssl.SSLContext | None:
+        if not self._config.tls_enabled:
+            return None
+        cert = Path(self._config.tls_cert_path)
+        key = Path(self._config.tls_key_path)
+        if not cert.is_file() or not key.is_file():
+            raise FileNotFoundError(
+                'TLS is enabled but certificate/key files are missing'
+            )
+        return build_server_ssl_context(cert_path=cert, key_path=key)
+
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
@@ -182,6 +199,7 @@ class MicServer:
                 ping_interval=20,
                 ping_timeout=20,
                 process_request=self._process_request,
+                ssl=self._ssl_context(),
             ) as ws_server:
                 sockets = getattr(ws_server, 'sockets', None) or []
                 if sockets:

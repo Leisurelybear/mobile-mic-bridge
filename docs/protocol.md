@@ -17,17 +17,17 @@ Windows 接收端通过 mDNS/DNS-SD 广播 `_mobilemic._tcp.local.`。TXT 记录
 
 ## QR Pairing / 二维码配对
 
-Default web-client URI (hosted by the receiver on the same TCP port):
+Default web-client URI (hosted by the receiver on the same TCP port, HTTPS by default so phone browsers can open the microphone):
 
-默认网页端 URI（由接收端在同一 TCP 端口托管）：
+默认网页端 URI（由接收端在同一 TCP 端口托管；默认 HTTPS，以便手机浏览器允许麦克风）：
 
 ```text
-http://192.168.1.20:8765/?token=optional
+https://192.168.1.20:8765/?token=optional
 ```
 
-The phone browser opens this page. The optional token is read from the query string for the current page session only and is not written to `localStorage` or cookies.
+The receiver generates a self-signed certificate for LAN use. Phone browsers will show a certificate warning once; choose “continue / advanced → proceed”. Plain `http://` remains available with `--no-tls`, but many phones then block `getUserMedia`.
 
-手机浏览器打开该页面。可选密码只从查询参数读入当前页面会话，不会写入 `localStorage` 或 cookie。
+接收端会生成局域网自签名证书。手机浏览器首次会提示证书不受信任，选择“继续访问/高级-继续”即可。仍可用 `--no-tls` 强制明文 HTTP，但多数手机会因此禁止开麦。
 
 Flutter app URI:
 

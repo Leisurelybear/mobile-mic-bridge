@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: mobile-mic-receiver
+Version: 0.1.0
+Summary: Receive PCM audio from Mobile Mic Bridge and play it to Windows.
+Requires-Python: >=3.10
+Requires-Dist: sounddevice==0.5.5
+Requires-Dist: websockets==16.1.1
+Requires-Dist: zeroconf==0.150.0
+Requires-Dist: qrcode==8.2
+Requires-Dist: Pillow>=10.0
+Requires-Dist: customtkinter>=5.2.0
+Requires-Dist: cryptography>=42.0
+Provides-Extra: test
+Requires-Dist: pytest<9.0,>=8.0; extra == "test"
