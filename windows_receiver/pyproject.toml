@@ -27,5 +27,8 @@ mobile-mic-receiver-gui = 'mobile_mic_receiver.gui.app:run_app'
 where = ['.']
 include = ['mobile_mic_receiver*']
 
+[tool.setuptools.package-data]
+mobile_mic_receiver = ['web_assets/*']
+
 [tool.pytest.ini_options]
 testpaths = ['tests']
