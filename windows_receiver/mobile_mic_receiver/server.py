@@ -7,9 +7,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from websockets.asyncio.server import ServerConnection, serve
+from websockets.datastructures import Headers
 from websockets.exceptions import ConnectionClosed
+from websockets.http11 import Request, Response
 
 from .buffer import AudioBuffer
+from .static_http import handle_http
 
 
 @dataclass(frozen=True)
@@ -138,6 +141,29 @@ class MicServer:
             'resume',
         }
 
+    async def _process_request(
+        self, connection: ServerConnection, request: Request
+    ) -> Response | None:
+        path = request.path.split('?', 1)[0]
+        if path == '/mic':
+            return None
+        # websockets.http11.Request only exposes path/headers; handshakes are GET.
+        method = getattr(request, 'method', 'GET') or 'GET'
+        static = handle_http(request.path, method)
+        if static is not None:
+            return static
+        return Response(
+            404,
+            'Not Found',
+            Headers(
+                [
+                    ('Content-Type', 'text/plain; charset=utf-8'),
+                    ('Connection', 'close'),
+                ]
+            ),
+            b'Not Found',
+        )
+
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
@@ -155,6 +181,7 @@ class MicServer:
                 max_queue=8,
                 ping_interval=20,
                 ping_timeout=20,
+                process_request=self._process_request,
             ) as ws_server:
                 sockets = getattr(ws_server, 'sockets', None) or []
                 if sockets:

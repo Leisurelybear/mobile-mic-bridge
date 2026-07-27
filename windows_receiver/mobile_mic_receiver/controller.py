@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from .audio import AudioOutput
 from .buffer import AudioBuffer, BufferStats
 from .discovery import MdnsAdvertiser, local_ipv4_addresses
-from .pairing import build_pairing_uri
+from .pairing import build_pairing_uri, build_web_pairing_uri
 from .server import MicServer, ServerConfig, ServerEvent
 
 
@@ -35,6 +35,7 @@ class ControllerSnapshot:
     buffering: bool
     local_addresses: tuple[str, ...]
     pairing_uri: str
+    app_pairing_uri: str
     bound_port: int | None
 
 
@@ -84,6 +85,7 @@ class ReceiverController:
         self._buffer: AudioBuffer | _PeakBuffer | None = None
         self._local_addresses: tuple[str, ...] = ()
         self._pairing_uri = ''
+        self._app_pairing_uri = ''
         self._bound_port: int | None = None
         self._sample_rate = 48000
         self._channels = 1
@@ -108,6 +110,7 @@ class ReceiverController:
             self._peak[0] = 0.0
             self._local_addresses = ()
             self._pairing_uri = ''
+            self._app_pairing_uri = ''
             self._bound_port = None
             self._server = None
             self._buffer = None
@@ -189,6 +192,7 @@ class ReceiverController:
                 buffering=stats.buffering,
                 local_addresses=self._local_addresses,
                 pairing_uri=self._pairing_uri,
+                app_pairing_uri=self._app_pairing_uri,
                 bound_port=self._bound_port,
             )
 
@@ -237,8 +241,14 @@ class ReceiverController:
                 return
             addresses = tuple(local_ipv4_addresses())
             pairing_uri = ''
+            app_pairing_uri = ''
             if addresses:
-                pairing_uri = build_pairing_uri(
+                pairing_uri = build_web_pairing_uri(
+                    host=addresses[0],
+                    port=config.port,
+                    token=config.token,
+                )
+                app_pairing_uri = build_pairing_uri(
                     host=addresses[0],
                     port=config.port,
                     token=config.token,
@@ -246,6 +256,7 @@ class ReceiverController:
             with self._lock:
                 self._local_addresses = addresses
                 self._pairing_uri = pairing_uri
+                self._app_pairing_uri = app_pairing_uri
 
             if self._stop_requested.is_set():
                 return

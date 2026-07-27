@@ -50,6 +50,9 @@ class ReceiverApp(ctk.CTk):
         self._last_status = ''
         self._qr_photo: ImageTk.PhotoImage | None = None
         self._running_ui = False
+        self._qr_host = ''
+        self._qr_port = 8765
+        self._last_qr_key = ''
 
         self._build_widgets()
         self._refresh_devices()
@@ -179,11 +182,21 @@ class ReceiverApp(ctk.CTk):
         pairing.grid_columnconfigure(0, weight=1)
         pairing.grid_rowconfigure(1, weight=1)
 
+        header = ctk.CTkFrame(pairing, fg_color='transparent')
+        header.grid(row=0, column=0, sticky='ew', padx=12, pady=(12, 8))
+        header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
-            pairing, text='配对', font=ctk.CTkFont(size=16, weight='bold')
-        ).grid(row=0, column=0, sticky='w', padx=12, pady=(12, 8))
+            header, text='配对', font=ctk.CTkFont(size=16, weight='bold')
+        ).grid(row=0, column=0, sticky='w')
+        self._qr_mode = ctk.CTkSegmentedButton(
+            header,
+            values=['网页', 'App'],
+            command=self._on_qr_mode,
+        )
+        self._qr_mode.set('网页')
+        self._qr_mode.grid(row=0, column=1, sticky='e')
 
-        self._qr_label = ctk.CTkLabel(pairing, text='启动后显示二维码')
+        self._qr_label = ctk.CTkLabel(pairing, text='启动后显示网页配对二维码')
         self._qr_label.grid(row=1, column=0, sticky='nsew', padx=12, pady=8)
 
         self._addresses_var = tk.StringVar(value='本机地址：—')
@@ -198,6 +211,9 @@ class ReceiverApp(ctk.CTk):
             pairing, text='复制配对链接', command=self._copy_uri
         )
         self._copy_btn.grid(row=4, column=0, sticky='ew', padx=12, pady=(4, 12))
+
+        # Keep row indices consistent with header at 0 and QR at 1.
+        # addresses/uri/copy stay at 2/3/4.
 
         meters = ctk.CTkFrame(self)
         meters.grid(row=2, column=0, sticky='ew', padx=16, pady=8)
@@ -417,16 +433,47 @@ class ReceiverApp(ctk.CTk):
 
     def _clear_qr(self) -> None:
         self._qr_photo = None
-        self._qr_label.configure(image=None, text='启动后显示二维码')
+        self._last_qr_key = ''
+        self._qr_label.configure(image=None, text='启动后显示网页配对二维码')
+
+    def _qr_mode_key(self) -> str:
+        return 'app' if self._qr_mode.get() == 'App' else 'web'
 
     def _update_qr(self, host: str, port: int, token: str) -> None:
+        mode = self._qr_mode_key()
+        key = f'{mode}|{host}|{port}|{token}'
+        if key == self._last_qr_key and self._qr_photo is not None:
+            return
         try:
-            image = make_qr_image(host=host, port=port, token=token, box_size=5)
+            image = make_qr_image(
+                host=host, port=port, token=token, box_size=5, mode=mode
+            )
             image = image.resize((220, 220), Image.Resampling.NEAREST)
             self._qr_photo = ImageTk.PhotoImage(image)
             self._qr_label.configure(image=self._qr_photo, text='')
+            self._last_qr_key = key
+            self._qr_host = host
+            self._qr_port = port
         except Exception as error:  # noqa: BLE001
+            self._qr_photo = None
+            self._last_qr_key = ''
             self._qr_label.configure(image=None, text=f'二维码不可用：{error}')
+
+    def _on_qr_mode(self, _value: str) -> None:
+        snap = self._controller.snapshot()
+        if self._qr_mode_key() == 'app':
+            if snap.app_pairing_uri:
+                self._uri_var.set(snap.app_pairing_uri)
+        else:
+            if snap.pairing_uri:
+                self._uri_var.set(snap.pairing_uri)
+        host = self._qr_host or (
+            snap.local_addresses[0] if snap.local_addresses else ''
+        )
+        port = snap.bound_port or self._qr_port or int(self._port_var.get() or 8765)
+        if host:
+            self._last_qr_key = ''
+            self._update_qr(host, port, self._token_var.get())
 
     def _copy_uri(self) -> None:
         uri = self._uri_var.get().strip()
@@ -477,13 +524,18 @@ class ReceiverApp(ctk.CTk):
                 )
             else:
                 self._addresses_var.set('本机地址：未检测到 IPv4，请用 ipconfig 查看')
-            if snap.pairing_uri:
-                if self._uri_var.get() != snap.pairing_uri:
-                    self._uri_var.set(snap.pairing_uri)
-                    host = snap.local_addresses[0] if snap.local_addresses else ''
-                    port = snap.bound_port or int(self._port_var.get() or 8765)
-                    if host:
-                        self._update_qr(host, port, self._token_var.get())
+            target_uri = (
+                snap.app_pairing_uri
+                if self._qr_mode_key() == 'app'
+                else snap.pairing_uri
+            )
+            if target_uri:
+                if self._uri_var.get() != target_uri:
+                    self._uri_var.set(target_uri)
+                host = snap.local_addresses[0] if snap.local_addresses else ''
+                port = snap.bound_port or int(self._port_var.get() or 8765)
+                if host:
+                    self._update_qr(host, port, self._token_var.get())
             elif not snap.local_addresses:
                 self._uri_var.set('')
                 self._qr_label.configure(

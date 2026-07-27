@@ -11,11 +11,33 @@ def build_pairing_uri(*, host: str, port: int, token: str) -> str:
     return f'mobilemic://connect?{urlencode(parameters)}'
 
 
-def make_qr_image(*, host: str, port: int, token: str, box_size: int = 6):
+def build_web_pairing_uri(*, host: str, port: int, token: str) -> str:
+    base = f'http://{host}:{port}/'
+    if not token:
+        return base
+    return f'{base}?{urlencode({"token": token})}'
+
+
+def _pairing_data(*, host: str, port: int, token: str, mode: str) -> str:
+    if mode == 'app':
+        return build_pairing_uri(host=host, port=port, token=token)
+    if mode == 'web':
+        return build_web_pairing_uri(host=host, port=port, token=token)
+    raise ValueError(f'unsupported pairing mode: {mode}')
+
+
+def make_qr_image(
+    *,
+    host: str,
+    port: int,
+    token: str,
+    box_size: int = 6,
+    mode: str = 'web',
+):
     import qrcode
     from PIL import Image
 
-    pairing_uri = build_pairing_uri(host=host, port=port, token=token)
+    pairing_uri = _pairing_data(host=host, port=port, token=token, mode=mode)
     code = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -30,18 +52,29 @@ def make_qr_image(*, host: str, port: int, token: str, box_size: int = 6):
     return image.convert('RGB')
 
 
-def print_pairing_qr(*, host: str, port: int, token: str) -> None:
+def print_pairing_qr(
+    *, host: str, port: int, token: str, mode: str = 'web'
+) -> None:
     import qrcode
 
-    pairing_uri = build_pairing_uri(host=host, port=port, token=token)
-    code = qrcode.QRCode(
-        version=None,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=1,
-        border=4,
-    )
-    code.add_data(pairing_uri)
-    code.make(fit=True)
-    print('Scan this QR code in the mobile app:')
-    code.print_ascii(out=sys.stdout, tty=False, invert=True)
-    print(f'Pairing URI: {pairing_uri}')
+    modes = ['web', 'app'] if mode == 'both' else [mode]
+    for item in modes:
+        pairing_uri = _pairing_data(
+            host=host, port=port, token=token, mode=item
+        )
+        code = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=1,
+            border=4,
+        )
+        code.add_data(pairing_uri)
+        code.make(fit=True)
+        label = (
+            'Scan this QR code in the phone browser:'
+            if item == 'web'
+            else 'Scan this QR code in the mobile app:'
+        )
+        print(label)
+        code.print_ascii(out=sys.stdout, tty=False, invert=True)
+        print(f'Pairing URI: {pairing_uri}')
