@@ -7,10 +7,6 @@
 #   .\start-receiver.ps1 -Cli -ListDevices
 #   .\start-receiver.ps1 -Cli -Token secret -Device 12
 #   .\start-receiver.ps1 -Rebuild
-#
-# After the first run, you can also call entry points directly:
-#   .\windows_receiver\.venv\Scripts\mobile-mic-receiver-gui.exe
-#   .\windows_receiver\.venv\Scripts\mobile-mic-receiver.exe --help
 
 [CmdletBinding()]
 param(
@@ -33,8 +29,6 @@ $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReceiverDir = Join-Path $RepoRoot 'windows_receiver'
 $VenvDir = Join-Path $ReceiverDir '.venv'
 $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
-$VenvGui = Join-Path $VenvDir 'Scripts\mobile-mic-receiver-gui.exe'
-$VenvCli = Join-Path $VenvDir 'Scripts\mobile-mic-receiver.exe'
 
 if (-not (Test-Path $ReceiverDir)) {
     Write-Error "windows_receiver not found under $RepoRoot"
@@ -43,15 +37,48 @@ if (-not (Test-Path $ReceiverDir)) {
 function Test-PythonLauncher {
     param([string]$Command, [string[]]$PrefixArgs = @())
     try {
-        $out = & $Command @PrefixArgs -c "import sys; print(sys.version_info -ge (3, 10))" 2>$null
+        $out = & $Command @PrefixArgs -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
         return ($LASTEXITCODE -eq 0 -and "$out".Trim() -eq 'True')
     } catch {
         return $false
     }
 }
 
+function Test-PackageImportable {
+    if (-not (Test-Path $VenvPython)) {
+        return $false
+    }
+    & $VenvPython -c "import mobile_mic_receiver, mobile_mic_receiver.gui.app" 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Install-Package {
+    Write-Host 'Installing mobile-mic-receiver into venv...'
+    # Clear partial/broken pip installs left by interrupted upgrades.
+    Get-ChildItem (Join-Path $VenvDir 'Lib\site-packages') -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like '~*' -or $_.Name -like '*mobile_mic_receiver*' -or $_.Name -like '*mobile-mic-receiver*' } |
+        ForEach-Object {
+            try { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue } catch {}
+        }
+    & $VenvPython -m pip install --upgrade pip
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'pip upgrade failed.'
+    }
+    & $VenvPython -m pip install -e $ReceiverDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'pip install failed.'
+    }
+    if (-not (Test-PackageImportable)) {
+        Write-Error 'Package installed but still not importable. Try: .\start-receiver.ps1 -Rebuild'
+    }
+}
+
 function Ensure-Venv {
-    if ((Test-Path $VenvPython) -and -not $Rebuild) {
+    if ($Rebuild -and (Test-Path $VenvDir)) {
+        Write-Host "Removing old venv at $VenvDir ..."
+        Remove-Item -Recurse -Force $VenvDir
+    }
+    if (Test-Path $VenvPython) {
         return
     }
 
@@ -71,26 +98,13 @@ function Ensure-Venv {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $VenvPython)) {
         Write-Error 'Failed to create virtual environment.'
     }
-    Write-Host 'Installing mobile-mic-receiver (editable)...'
-    & $VenvPython -m pip install --upgrade pip
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error 'pip upgrade failed.'
-    }
-    & $VenvPython -m pip install -e $ReceiverDir
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error 'pip install failed.'
-    }
 }
 
-function Ensure-EntryPoints {
-    if ((Test-Path $VenvGui) -and (Test-Path $VenvCli) -and -not $Rebuild) {
+function Ensure-Package {
+    if ((-not $Rebuild) -and (Test-PackageImportable)) {
         return
     }
-    Write-Host 'Refreshing package install for entry points...'
-    & $VenvPython -m pip install -e $ReceiverDir
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error 'pip install failed.'
-    }
+    Install-Package
 }
 
 function Build-CliArgs {
@@ -124,22 +138,23 @@ function Build-CliArgs {
 Push-Location $ReceiverDir
 try {
     Ensure-Venv
-    Ensure-EntryPoints
+    Ensure-Package
 
     if ($Cli) {
         $cliArgs = @(Build-CliArgs)
         Write-Host 'Starting console receiver...'
         if ($cliArgs.Count -gt 0) {
-            & $VenvCli @cliArgs
+            & $VenvPython -m mobile_mic_receiver.cli @cliArgs
         } else {
-            & $VenvCli
+            & $VenvPython -m mobile_mic_receiver.cli
         }
     } else {
         if ($ListDevices -or $Token -or $Device -or $Port -gt 0 -or $HostAddress -or $QrMode -or $NoDiscovery -or $NoQr) {
             Write-Warning 'CLI options ignored in GUI mode. Use -Cli, or configure options in the window.'
         }
-        Write-Host 'Starting GUI receiver (web QR pairing enabled)...'
-        & $VenvGui
+        Write-Host 'Starting GUI receiver (HTTPS web QR pairing enabled)...'
+        # Launch via python -m so a broken console script / partial pip install cannot hide the package.
+        & $VenvPython -m mobile_mic_receiver.gui.app
     }
     exit $LASTEXITCODE
 } finally {

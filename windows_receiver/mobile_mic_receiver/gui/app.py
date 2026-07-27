@@ -6,7 +6,10 @@ from typing import Any
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
-from mobile_mic_receiver.audio import list_output_devices
+from mobile_mic_receiver.audio import (
+    is_recommended_output_name,
+    list_output_devices,
+)
 from mobile_mic_receiver.controller import (
     ControllerConfig,
     ControllerSnapshot,
@@ -96,17 +99,31 @@ class ReceiverApp(ctk.CTk):
         ).grid(row=0, column=0, columnspan=3, sticky='w', padx=12, pady=(12, 8))
 
         ctk.CTkLabel(settings, text='输出设备').grid(
-            row=1, column=0, sticky='w', padx=12, pady=6
+            row=1, column=0, sticky='nw', padx=12, pady=6
         )
+        device_col = ctk.CTkFrame(settings, fg_color='transparent')
+        device_col.grid(row=1, column=1, sticky='ew', padx=6, pady=6)
+        device_col.grid_columnconfigure(0, weight=1)
         self._device_var = tk.StringVar(value='')
         self._device_menu = ctk.CTkOptionMenu(
-            settings, variable=self._device_var, values=['']
+            device_col, variable=self._device_var, values=['']
         )
-        self._device_menu.grid(row=1, column=1, sticky='ew', padx=6, pady=6)
+        self._device_menu.grid(row=0, column=0, sticky='ew')
+        self._device_hint_var = tk.StringVar(
+            value='给 Discord/OBS 当麦克风时，请选「CABLE Input」等虚拟声卡输入（标 ★推荐）。'
+        )
+        ctk.CTkLabel(
+            device_col,
+            textvariable=self._device_hint_var,
+            text_color='#9DB0C7',
+            justify='left',
+            wraplength=320,
+            font=ctk.CTkFont(size=12),
+        ).grid(row=1, column=0, sticky='ew', pady=(4, 0))
         self._refresh_btn = ctk.CTkButton(
             settings, text='刷新', width=70, command=self._refresh_devices
         )
-        self._refresh_btn.grid(row=1, column=2, sticky='e', padx=12, pady=6)
+        self._refresh_btn.grid(row=1, column=2, sticky='ne', padx=12, pady=6)
 
         ctk.CTkLabel(settings, text='端口').grid(
             row=2, column=0, sticky='w', padx=12, pady=6
@@ -176,6 +193,7 @@ class ReceiverApp(ctk.CTk):
             self._discovery_var,
         ):
             var.trace_add('write', self._schedule_save)
+        self._device_var.trace_add('write', lambda *_args: self._update_device_hint())
 
         pairing = ctk.CTkFrame(body)
         pairing.grid(row=0, column=1, sticky='nsew', padx=(6, 12), pady=12)
@@ -268,9 +286,9 @@ class ReceiverApp(ctk.CTk):
 
     def _collect_settings(self) -> ReceiverSettings:
         device_name = ''
-        label = self._device_var.get()
-        if label and ': ' in label:
-            device_name = label.split(': ', 1)[1]
+        selected = self._selected_device_info()
+        if selected is not None:
+            device_name = selected[1]
         try:
             port = int(self._port_var.get().strip())
         except ValueError:
@@ -309,10 +327,41 @@ class ReceiverApp(ctk.CTk):
         self._prebuffer_var.set(str(settings.prebuffer_ms))
         self._discovery_var.set(settings.discovery_enabled)
         if settings.device_name:
-            for label in self._device_labels:
-                if label.endswith(f': {settings.device_name}'):
-                    self._device_var.set(label)
+            for index, name, _channels in self._devices:
+                if name == settings.device_name:
+                    self._device_var.set(self._format_device_label(index, name))
+                    self._update_device_hint()
                     break
+
+    def _format_device_label(self, index: int, name: str) -> str:
+        if is_recommended_output_name(name):
+            return f'{index}: {name}  ★推荐'
+        return f'{index}: {name}'
+
+    def _update_device_hint(self) -> None:
+        selected = self._selected_device_info()
+        has_recommended = any(
+            is_recommended_output_name(name) for _index, name, _ch in self._devices
+        )
+        if not self._devices:
+            self._device_hint_var.set('未检测到输出设备。请检查声卡驱动后点刷新。')
+            return
+        if selected is not None and is_recommended_output_name(selected[1]):
+            self._device_hint_var.set(
+                '已选虚拟声卡输入。Discord/会议软件请把麦克风设为对应的 '
+                'CABLE Output / Voicemeeter Out。'
+            )
+            return
+        if has_recommended:
+            self._device_hint_var.set(
+                '检测到虚拟声卡。若要给软件当麦克风，请选带 ★推荐 的 '
+                'CABLE Input / Voicemeeter 输入，不要选普通扬声器。'
+            )
+            return
+        self._device_hint_var.set(
+            '未检测到 VB-CABLE / Voicemeeter。当前可选扬声器仅用于试听；'
+            '要给 Discord/OBS 当麦克风，请先安装虚拟音频线并刷新。'
+        )
 
     def _refresh_devices(self) -> None:
         try:
@@ -321,27 +370,46 @@ class ReceiverApp(ctk.CTk):
             self._message_var.set(f'无法枚举音频设备：{error}')
             return
         self._devices = devices
-        self._device_labels = [f'{index}: {name}' for index, name, _ in devices]
+        self._device_labels = [
+            self._format_device_label(index, name) for index, name, _ in devices
+        ]
         values = self._device_labels or ['(无可用输出设备)']
         current = self._device_var.get()
         self._device_menu.configure(values=values)
         if current in values:
             self._device_var.set(current)
         else:
-            self._device_var.set(values[0])
+            # Prefer a recommended virtual cable when nothing is selected yet.
+            preferred = next(
+                (
+                    self._format_device_label(index, name)
+                    for index, name, _ in devices
+                    if is_recommended_output_name(name)
+                ),
+                values[0],
+            )
+            self._device_var.set(preferred)
+        self._update_device_hint()
+
+    def _selected_device_info(self) -> tuple[int, str, int] | None:
+        label = self._device_var.get()
+        if not label or label.startswith('(') or ':' not in label:
+            return None
+        index_text = label.split(':', 1)[0].strip()
+        try:
+            index = int(index_text)
+        except ValueError:
+            return None
+        for item in self._devices:
+            if item[0] == index:
+                return item
+        return None
 
     def _selected_device(self) -> int | str | None:
-        label = self._device_var.get()
-        if not label or label.startswith('('):
+        info = self._selected_device_info()
+        if info is None:
             return None
-        if ': ' not in label:
-            return None
-        index_text, name = label.split(': ', 1)
-        try:
-            return int(index_text)
-        except ValueError:
-            return name
-
+        return info[0]
     def _validate_form(self) -> tuple[bool, str, ControllerConfig | None]:
         try:
             port = int(self._port_var.get().strip())

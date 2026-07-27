@@ -6,6 +6,24 @@ import sounddevice as sd
 
 from .buffer import AudioBuffer
 
+# Prefer these when the phone stream should become a Windows "microphone"
+# for Discord/OBS/meetings via a virtual audio cable.
+RECOMMENDED_OUTPUT_KEYWORDS = (
+    'cable input',
+    'vb-audio',
+    'vb-cable',
+    'voicemeeter input',
+    'voicemeeter vaio',
+    'voicemeeter aux',
+    'voicemeeter out',
+    'virtual cable',
+)
+
+
+def is_recommended_output_name(name: str) -> bool:
+    lower = name.casefold()
+    return any(keyword in lower for keyword in RECOMMENDED_OUTPUT_KEYWORDS)
+
 
 def list_output_devices() -> list[tuple[int, str, int]]:
     devices: list[tuple[int, str, int]] = []
@@ -13,6 +31,10 @@ def list_output_devices() -> list[tuple[int, str, int]]:
         output_channels = int(device['max_output_channels'])
         if output_channels > 0:
             devices.append((index, str(device['name']), output_channels))
+    # Recommended virtual-cable inputs first for easier selection.
+    devices.sort(
+        key=lambda item: (0 if is_recommended_output_name(item[1]) else 1, item[0])
+    )
     return devices
 
 
