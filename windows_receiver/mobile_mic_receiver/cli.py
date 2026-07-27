@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--prebuffer-ms', type=int, default=80)
     parser.add_argument('--no-discovery', action='store_true')
     parser.add_argument('--no-qr', action='store_true')
+    parser.add_argument(
+        '--qr-mode',
+        choices=('web', 'app', 'both'),
+        default='web',
+        help='Pairing QR content (default: web page URL)',
+    )
     parser.add_argument('--list-devices', action='store_true')
     return parser
 
@@ -79,12 +85,15 @@ def main() -> None:
             print(f'  {address}')
     else:
         print('Run ipconfig to find this computer IPv4 address.')
+    if addresses:
+        print(f'Web page: http://{addresses[0]}:{args.port}/')
     if addresses and not args.no_qr:
         try:
             print_pairing_qr(
                 host=addresses[0],
                 port=args.port,
                 token=args.token,
+                mode=args.qr_mode,
             )
         except Exception as error:
             print(f'Warning: pairing QR unavailable: {error}')
