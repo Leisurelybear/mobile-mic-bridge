@@ -4,17 +4,18 @@
 
 Use an Android or iOS phone as a low-latency Wi-Fi microphone for a Windows PC.
 
-The mobile app captures mono PCM audio and streams it over a WebSocket on the local network. The Windows receiver plays that stream to a selected output device. To expose the stream as a microphone to Discord, OBS, games, meeting software, or a browser, select a virtual audio cable as the receiver output.
+The mobile app or the **built-in browser page** captures mono PCM audio and streams it over a WebSocket on the local network. The Windows receiver plays that stream to a selected output device. To expose the stream as a microphone to Discord, OBS, games, meeting software, or a browser, select a virtual audio cable as the receiver output.
 
 ## Features
 
 - One Flutter sender for Android and iOS
+- **Browser web client** hosted by the Windows receiver (scan QR, no app install)
 - 48 kHz, mono, signed 16-bit PCM transport
 - Bounded jitter buffer with underflow recovery
 - Optional connection password
 - Automatic Windows receiver discovery with mDNS/DNS-SD
 - Windows GUI receiver with in-window pairing QR and level meters
-- QR-code pairing fallback when mDNS is unavailable
+- QR-code pairing for the web page (default) or Flutter app
 - Remembers the last receiver address, port, and transmit gain
 - Phone-side transmit gain from 0% to 200%
 - Repeatable pause and resume without reconnecting
@@ -47,7 +48,7 @@ The virtual cable is required because normal Windows applications cannot create 
 3. Double-click the GUI receiver.
 4. Choose the output device (for example `CABLE Input`), set a connection password, and click **Start**.
 5. Allow TCP port `8765` when Windows Firewall asks.
-6. The window shows local addresses and a pairing QR code.
+6. The window shows local addresses and a **web pairing QR code** (`http://...:8765/`).
 
 Settings are stored at `%APPDATA%\MobileMicBridge\settings.json`, including the connection password in plain text for local convenience (not a secure vault).
 
@@ -68,7 +69,17 @@ mobile-mic-receiver --list-devices
 mobile-mic-receiver --device 12 --token choose-a-password
 ```
 
-### 2. Build the Mobile App
+### 2. Connect with the phone browser (recommended, no app install)
+
+1. Put the phone and PC on the same Wi-Fi network.
+2. Scan the **网页** QR code in the Windows window (or open `http://PC-IP:8765/?token=...`).
+3. Allow microphone access, keep the page in the foreground, and tap **开始传输**.
+4. Prefer headphones so PC speaker audio is less likely to re-enter the phone mic. Browser echo cancellation / noise suppression / AGC are on by default.
+5. In the target Windows application, choose the virtual cable output as the microphone.
+
+Browser background capture is **best-effort** only. Locking the screen or switching apps may stop audio, especially on iOS Safari. The connection password from the QR query string stays in page memory for the session and is not stored.
+
+### 3. Or build the Flutter mobile app
 
 Install Flutter, then run:
 
@@ -80,14 +91,14 @@ flutter run
 
 An iOS build requires macOS, Xcode, an Apple developer team, and normal code signing. Android can be built on Windows, macOS, or Linux.
 
-### 3. Connect
+In the Windows GUI, switch the QR mode to **App** (or use `--qr-mode app`) to show the `mobilemic://` pairing code.
 
 1. Put the phone and PC on the same Wi-Fi network.
-2. Select the discovered PC, scan the QR code in the Windows window, or enter its IPv4 address and port `8765` manually.
+2. Select the discovered PC, scan the App QR code, or enter its IPv4 address and port `8765` manually.
 3. Tap `开始传输`.
 4. In the target Windows application, choose the virtual cable output as the microphone.
 
-The app keeps streaming while it is backgrounded or the screen is locked. Android shows an ongoing microphone notification; iOS uses the audio background mode. User-paused sessions remain paused, and force-stop, swipe-away, or process termination ends the session. Use headphones to prevent the PC speakers from feeding back into the phone microphone.
+The Flutter app keeps streaming while it is backgrounded or the screen is locked. Android shows an ongoing microphone notification; iOS uses the audio background mode. User-paused sessions remain paused, and force-stop, swipe-away, or process termination ends the session. Use headphones to prevent the PC speakers from feeding back into the phone microphone.
 
 The volume slider changes the PCM level sent to Windows. `100%` preserves the captured level, `0%` mutes it, and values above `100%` may clip loud samples.
 
@@ -106,10 +117,11 @@ The developer console entry `mobile-mic-receiver` supports:
 --prebuffer-ms    Startup and recovery buffer, default 80
 --no-discovery    Disable mDNS advertisement
 --no-qr           Do not print the terminal pairing QR code
+--qr-mode         web|app|both (default web page URL)
 --list-devices    List output devices and exit
 ```
 
-The GUI exposes the same port, password, latency, prebuffer, and mDNS controls.
+The GUI exposes the same port, password, latency, prebuffer, and mDNS controls, plus a Web/App QR toggle.
 
 Lower `--prebuffer-ms` reduces latency but increases crackling risk on unstable Wi-Fi. Values between 60 and 120 ms are practical starting points.
 `--prebuffer-ms` must not exceed `--latency-ms`.
@@ -159,3 +171,6 @@ GitHub Actions cannot produce an installable signed iOS IPA without repository-s
 - Audio is uncompressed PCM, so typical bandwidth is about 768 kbit/s before WebSocket overhead.
 - The current transport is optimized for a local Wi-Fi network, not the public internet.
 - Windows microphone exposure depends on a separately installed virtual audio cable.
+- The browser web client does not guarantee background or lock-screen capture; keep the page foreground when possible.
+- Browser echo cancellation quality varies by device and OS; headphones are still recommended.
+- iOS Safari support is best-effort compared with Android Chrome.

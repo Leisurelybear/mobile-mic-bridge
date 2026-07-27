@@ -17,7 +17,21 @@ Windows 接收端通过 mDNS/DNS-SD 广播 `_mobilemic._tcp.local.`。TXT 记录
 
 ## QR Pairing / 二维码配对
 
-When the receiver starts, it may print an ASCII QR code containing a URI in this form:
+Default web-client URI (hosted by the receiver on the same TCP port):
+
+默认网页端 URI（由接收端在同一 TCP 端口托管）：
+
+```text
+http://192.168.1.20:8765/?token=optional
+```
+
+The phone browser opens this page. The optional token is read from the query string for the current page session only and is not written to `localStorage` or cookies.
+
+手机浏览器打开该页面。可选密码只从查询参数读入当前页面会话，不会写入 `localStorage` 或 cookie。
+
+Flutter app URI:
+
+Flutter 应用 URI：
 
 ```text
 mobilemic://connect?host=192.168.1.20&port=8765&token=optional
@@ -25,7 +39,11 @@ mobilemic://connect?host=192.168.1.20&port=8765&token=optional
 
 The mobile app validates the scheme, host, port, and optional token before filling the connection form. The QR token is used for the current session but is not persisted by the app.
 
-接收端启动时可以在终端显示 ASCII 二维码，其内容使用上述 `mobilemic://` URI。手机会校验协议、地址、端口和可选密码后填写连接表单。二维码中的密码只用于当前运行，不会持久化。
+手机应用会校验协议、地址、端口和可选密码后填写连接表单。二维码中的密码只用于当前运行，不会持久化。
+
+The receiver may show either QR (default is the web page). CLI flag: `--qr-mode web|app|both`.
+
+接收端可以展示网页或 App 二维码（默认网页）。命令行：`--qr-mode web|app|both`。
 
 ## Handshake / 握手
 
@@ -41,7 +59,7 @@ The first frame must be a JSON object with these fields:
 | `channels` | `1` | 单声道 |
 | `format` | `pcm_s16le` | 16 位小端 PCM |
 | `token` | optional string | 可选连接密码 |
-| `device` | platform string | 手机平台信息 |
+| `device` | platform string | 手机平台信息；网页端可为 `web-android` / `web-ios` / `web-other` |
 
 The server responds with a JSON object whose type is `ready`, or an error object containing a human-readable message. The sender must wait for `ready` before starting audio capture. An error closes the connection with WebSocket policy code `1008`.
 
