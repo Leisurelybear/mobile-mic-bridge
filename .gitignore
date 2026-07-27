@@ -15,3 +15,5 @@ mobile_app/macos/
 mobile_app/windows/
 mobile_app/web/
 mobile_app/.metadata
+
+*.egg-info/

@@ -1,3 +1,0 @@
-[console_scripts]
-mobile-mic-receiver = mobile_mic_receiver.cli:main
-mobile-mic-receiver-gui = mobile_mic_receiver.gui.app:run_app
