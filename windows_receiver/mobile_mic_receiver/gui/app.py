@@ -44,8 +44,8 @@ class ReceiverApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
         self.title('Mobile Mic Bridge')
-        self.geometry('920x600')
-        self.minsize(820, 540)
+        self.geometry('920x720')
+        self.minsize(820, 640)
 
         self._controller = ReceiverController()
         self._settings = load_settings()
