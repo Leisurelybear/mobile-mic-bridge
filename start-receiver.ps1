@@ -153,8 +153,9 @@ try {
             Write-Warning 'CLI options ignored in GUI mode. Use -Cli, or configure options in the window.'
         }
         Write-Host 'Starting GUI receiver (HTTPS web QR pairing enabled)...'
-        # Launch via python -m so a broken console script / partial pip install cannot hide the package.
-        & $VenvPython -m mobile_mic_receiver.gui.app
+        # Launch via package __main__ so a broken console script / partial pip
+        # install cannot hide the package, and avoid runpy double-import warnings.
+        & $VenvPython -m mobile_mic_receiver.gui
     }
     exit $LASTEXITCODE
 } finally {
