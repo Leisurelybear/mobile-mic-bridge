@@ -4,7 +4,7 @@ import tkinter as tk
 from typing import Any
 
 import customtkinter as ctk
-from PIL import Image, ImageTk
+from PIL import Image
 
 from mobile_mic_receiver.audio import (
     is_recommended_output_name,
@@ -15,6 +15,7 @@ from mobile_mic_receiver.controller import (
     ControllerSnapshot,
     ReceiverController,
 )
+from mobile_mic_receiver.gui.qr_display import clear_qr_label, set_qr_label_image
 from mobile_mic_receiver.gui.setup_wizard import SetupWizard
 from mobile_mic_receiver.pairing import make_qr_image
 from mobile_mic_receiver.settings import (
@@ -53,7 +54,7 @@ class ReceiverApp(ctk.CTk):
         self._device_labels: list[str] = []
         self._save_after_id: str | None = None
         self._last_status = ''
-        self._qr_photo: ImageTk.PhotoImage | None = None
+        self._qr_holder: dict[str, Any] = {'image': None}
         self._running_ui = False
         self._qr_host = ''
         self._qr_port = 8765
@@ -546,9 +547,12 @@ class ReceiverApp(ctk.CTk):
         self._buffer_var.set('缓冲 0 ms · 欠载 0')
 
     def _clear_qr(self) -> None:
-        self._qr_photo = None
         self._last_qr_key = ''
-        self._qr_label.configure(image=None, text='启动后显示网页配对二维码')
+        clear_qr_label(
+            self._qr_label,
+            self._qr_holder,
+            text='启动后显示网页配对二维码',
+        )
 
     def _qr_mode_key(self) -> str:
         return 'app' if self._qr_mode.get() == 'App' else 'web'
@@ -559,7 +563,7 @@ class ReceiverApp(ctk.CTk):
         mode = self._qr_mode_key()
         scheme = 'https' if tls_enabled else 'http'
         key = f'{mode}|{scheme}|{host}|{port}|{token}'
-        if key == self._last_qr_key and self._qr_photo is not None:
+        if key == self._last_qr_key and self._qr_holder.get('image') is not None:
             return
         try:
             image = make_qr_image(
@@ -571,15 +575,19 @@ class ReceiverApp(ctk.CTk):
                 scheme=scheme,
             )
             image = image.resize((220, 220), Image.Resampling.NEAREST)
-            self._qr_photo = ImageTk.PhotoImage(image)
-            self._qr_label.configure(image=self._qr_photo, text='')
+            set_qr_label_image(
+                self._qr_label, self._qr_holder, image, size=(220, 220)
+            )
             self._last_qr_key = key
             self._qr_host = host
             self._qr_port = port
         except Exception as error:  # noqa: BLE001
-            self._qr_photo = None
             self._last_qr_key = ''
-            self._qr_label.configure(image=None, text=f'二维码不可用：{error}')
+            clear_qr_label(
+                self._qr_label,
+                self._qr_holder,
+                text=f'二维码不可用：{error}',
+            )
 
     def _on_qr_mode(self, _value: str) -> None:
         snap = self._controller.snapshot()
@@ -670,8 +678,11 @@ class ReceiverApp(ctk.CTk):
                     )
             elif not snap.local_addresses:
                 self._uri_var.set('')
-                self._qr_label.configure(
-                    image=None, text='无本机 IPv4，无法生成二维码'
+                self._last_qr_key = ''
+                clear_qr_label(
+                    self._qr_label,
+                    self._qr_holder,
+                    text='无本机 IPv4，无法生成二维码',
                 )
             if snap.warning:
                 self._message_var.set(snap.warning)
