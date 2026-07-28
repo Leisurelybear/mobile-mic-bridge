@@ -10,6 +10,7 @@ STATIC_ROUTES: dict[str, tuple[str, str]] = {
     '/': ('index.html', 'text/html; charset=utf-8'),
     '/index.html': ('index.html', 'text/html; charset=utf-8'),
     '/app.js': ('app.js', 'application/javascript; charset=utf-8'),
+    '/dsp.js': ('dsp.js', 'application/javascript; charset=utf-8'),
     '/styles.css': ('styles.css', 'text/css; charset=utf-8'),
     '/worklet.js': ('worklet.js', 'application/javascript; charset=utf-8'),
 }

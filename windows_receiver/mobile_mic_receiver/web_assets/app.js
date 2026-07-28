@@ -2,11 +2,16 @@
   const TARGET_RATE = 48000;
   const FRAME_SAMPLES = 960; // 20 ms @ 48 kHz
   const MAX_QUEUE_FRAMES = 8;
+  const Dsp = globalThis.MobileMicDsp;
+  if (!Dsp) {
+    console.error('MobileMicDsp missing — load /dsp.js before /app.js');
+  }
 
   const els = {
     status: document.getElementById('status'),
     error: document.getElementById('error'),
     bgWarn: document.getElementById('bg-warn'),
+    feedbackWarn: document.getElementById('feedback-warn'),
     start: document.getElementById('btn-start'),
     pause: document.getElementById('btn-pause'),
     stop: document.getElementById('btn-stop'),
@@ -15,6 +20,7 @@
     echo: document.getElementById('echo'),
     noise: document.getElementById('noise'),
     agc: document.getElementById('agc'),
+    feedback: document.getElementById('feedback'),
     level: document.getElementById('level'),
   };
 
@@ -32,6 +38,12 @@
   let wakeLock = null;
   let sendQueue = [];
   let pcmCarry = new Float32Array(0);
+  let feedbackGuard = {
+    highCount: 0,
+    lowCount: 0,
+    duckGain: 1,
+    ducked: false,
+  };
 
   function setStatus(text) {
     els.status.textContent = `状态：${text}`;
@@ -45,6 +57,21 @@
     }
     els.error.hidden = false;
     els.error.textContent = message;
+  }
+
+  function setFeedbackWarn(show) {
+    if (!els.feedbackWarn) return;
+    els.feedbackWarn.hidden = !show;
+  }
+
+  function resetFeedbackGuard() {
+    feedbackGuard = {
+      highCount: 0,
+      lowCount: 0,
+      duckGain: 1,
+      ducked: false,
+    };
+    setFeedbackWarn(false);
   }
 
   function setButtons() {
@@ -66,12 +93,17 @@
   }
 
   function audioConstraints() {
+    // Prefer ideal+exact-ish constraints so browsers keep AEC/NS on when
+    // possible. PC-speaker echo is acoustic; phone AEC only partially helps.
     return {
       audio: {
-        channelCount: 1,
-        echoCancellation: !!els.echo.checked,
-        noiseSuppression: !!els.noise.checked,
-        autoGainControl: !!els.agc.checked,
+        channelCount: { ideal: 1 },
+        echoCancellation: { ideal: !!els.echo.checked },
+        noiseSuppression: { ideal: !!els.noise.checked },
+        autoGainControl: { ideal: !!els.agc.checked },
+        // Avoid Bluetooth SCO / speakerphone routes that worsen feedback when
+        // the phone is near a PC speaker (best-effort; browsers may ignore).
+        voiceIsolation: els.noise.checked ? { ideal: true } : undefined,
       },
       video: false,
     };
@@ -91,18 +123,6 @@
       out[i] = input[i0] * (1 - frac) + input[i1] * frac;
     }
     return out;
-  }
-
-  function floatToPcm16(floatSamples, gainValue) {
-    const buffer = new ArrayBuffer(floatSamples.length * 2);
-    const view = new DataView(buffer);
-    for (let i = 0; i < floatSamples.length; i++) {
-      let s = floatSamples[i] * gainValue;
-      if (s > 1) s = 1;
-      if (s < -1) s = -1;
-      view.setInt16(i * 2, (s * 32767) | 0, true);
-    }
-    return buffer;
   }
 
   function peakOf(floatSamples) {
@@ -131,7 +151,19 @@
     if (sid !== sessionId || state !== 'streaming') return;
     const rate = audioContext ? audioContext.sampleRate : TARGET_RATE;
     const resampled = resampleLinear(floatSamples, rate, TARGET_RATE);
-    els.level.value = peakOf(resampled);
+    const inputPeak = peakOf(resampled);
+    els.level.value = inputPeak;
+
+    if (els.feedback && els.feedback.checked && Dsp) {
+      const result = Dsp.updateFeedbackGuard(feedbackGuard, inputPeak);
+      feedbackGuard = result.guard;
+      if (result.justDucked) setFeedbackWarn(true);
+      if (!feedbackGuard.ducked) setFeedbackWarn(false);
+    } else if (!els.feedback || !els.feedback.checked) {
+      if (feedbackGuard.duckGain !== 1 || feedbackGuard.ducked) {
+        resetFeedbackGuard();
+      }
+    }
 
     const merged = new Float32Array(pcmCarry.length + resampled.length);
     merged.set(pcmCarry, 0);
@@ -140,7 +172,27 @@
     let offset = 0;
     while (offset + FRAME_SAMPLES <= merged.length) {
       const frame = merged.subarray(offset, offset + FRAME_SAMPLES);
-      enqueuePcm(floatToPcm16(frame, gain));
+      if (Dsp) {
+        const encoded = Dsp.floatToPcm16Limited(
+          frame,
+          gain,
+          feedbackGuard.duckGain,
+          0.89
+        );
+        enqueuePcm(encoded.buffer);
+      } else {
+        // Fallback without DSP module: hard clip only.
+        const buffer = new ArrayBuffer(frame.length * 2);
+        const view = new DataView(buffer);
+        const duck = feedbackGuard.duckGain || 1;
+        for (let i = 0; i < frame.length; i++) {
+          let s = frame[i] * gain * duck;
+          if (s > 1) s = 1;
+          if (s < -1) s = -1;
+          view.setInt16(i * 2, (s * 32767) | 0, true);
+        }
+        enqueuePcm(buffer);
+      }
       offset += FRAME_SAMPLES;
     }
     pcmCarry = merged.subarray(offset);
@@ -258,6 +310,7 @@
     stopMicOnly();
     closeSocket();
     await releaseWakeLock();
+    resetFeedbackGuard();
   }
 
   function connectWs(sid) {
@@ -343,6 +396,7 @@
     sessionId += 1;
     const sid = sessionId;
     setError('');
+    resetFeedbackGuard();
     state = 'requesting_mic';
     setStatus('申请麦克风…');
     setButtons();
@@ -446,6 +500,11 @@
   els.echo.addEventListener('change', () => applyTrackConstraints());
   els.noise.addEventListener('change', () => applyTrackConstraints());
   els.agc.addEventListener('change', () => applyTrackConstraints());
+  if (els.feedback) {
+    els.feedback.addEventListener('change', () => {
+      if (!els.feedback.checked) resetFeedbackGuard();
+    });
+  }
 
   document.addEventListener('visibilitychange', () => {
     els.bgWarn.hidden = document.visibilityState === 'visible';

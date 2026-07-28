@@ -14,11 +14,15 @@
     <main class="card">
       <h1>Mobile Mic Bridge</h1>
       <p class="hint">
-        建议佩戴耳机，并尽量保持本页在前台。浏览器降噪/回声消除默认开启，但不能保证锁屏后继续录音。
-        手机浏览器通常要求 <strong>HTTPS</strong> 才能开麦；若看到证书警告，请选择“继续访问/高级-继续”。
+        <strong>强烈建议戴耳机。</strong>电脑外放时，扬声器声音会被手机再次录入并越放越大（啸叫）。
+        浏览器回声消除只能压一部分，不能替代耳机。请尽量保持本页在前台；锁屏后录音可能被系统中断。
+        手机浏览器通常要求 <strong>HTTPS</strong>；若看到证书警告，请选择“继续访问/高级-继续”。
       </p>
       <p id="status" class="status">状态：空闲</p>
       <p id="error" class="error" hidden></p>
+      <p id="feedback-warn" class="warn" hidden>
+        检测到可能啸叫，已自动降低发送音量。请戴耳机或把电脑音量调低。
+      </p>
       <p id="bg-warn" class="warn" hidden>
         页面已进入后台，传输可能被系统中断。
       </p>
@@ -38,7 +42,13 @@
         <legend>音频处理</legend>
         <label><input id="echo" type="checkbox" checked /> 回声消除</label>
         <label><input id="noise" type="checkbox" checked /> 噪音抑制</label>
-        <label><input id="agc" type="checkbox" checked /> 自动增益</label>
+        <label
+          ><input id="agc" type="checkbox" /> 自动增益（外放时建议关闭）</label
+        >
+        <label
+          ><input id="feedback" type="checkbox" checked />
+          防啸叫（持续过大时自动压音量）</label
+        >
       </fieldset>
 
       <label class="block">
@@ -46,6 +56,7 @@
         <progress id="level" max="1" value="0"></progress>
       </label>
     </main>
+    <script src="/dsp.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

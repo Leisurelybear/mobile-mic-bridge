@@ -16,6 +16,20 @@ def test_resolve_strips_query() -> None:
     )
 
 
+def test_resolve_dsp_js() -> None:
+    assert resolve_static('/dsp.js') == (
+        'dsp.js',
+        'application/javascript; charset=utf-8',
+    )
+
+
+def test_handle_get_dsp_ok() -> None:
+    response = handle_http('/dsp.js', 'GET')
+    assert response is not None
+    assert response.status_code == 200
+    assert b'MobileMicDsp' in bytes(response.body)
+
+
 def test_resolve_unknown_is_none() -> None:
     assert resolve_static('/secret') is None
     assert resolve_static('/../pairing.py') is None
